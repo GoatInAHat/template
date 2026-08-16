@@ -13,19 +13,40 @@ of truth, and what it must not touch.>
 
 ## Code quality
 
-- Prefer correct, complete implementations over minimal ones.
+- Prefer correct, complete implementations over minimal ones. Complete means
+  every path the requested behaviour needs actually works — not extra paths
+  nobody asked for. Speculative generality is a defect, not thoroughness.
+- **Never write a second implementation of something this repo already does.**
+  Look for the existing helper, type, or pattern before writing a new one. If it
+  doesn't fit, change it where it lives so every caller gets the fix.
+- Keep machinery and abstractions as central as makes sense: one owner per
+  concern, callers stay thin. An abstraction with one implementation and no
+  second caller in sight is premature — inline it until a real second case
+  arrives.
 - Use appropriate data structures and algorithms; don't brute-force what has a
   known better solution.
-- When fixing a bug, fix the root cause, not the symptom.
+- When fixing a bug, fix the root cause, not the symptom. Check every caller of
+  the function you are about to change; one guard in the shared path beats a
+  guard in each caller, and patching only the reported path leaves its siblings
+  broken.
 - If something requires or could use error handling or validation to work
-  reliably, include it without asking.
+  reliably, include it without asking. Never simplify away validation at trust
+  boundaries, error handling that prevents data loss, security controls, or
+  accessibility basics.
 - For anything frontend or fullstack, do E2E testing in a real browser with live
   API keys whenever possible (Playwright, a browser MCP, or the dev
   environment — whichever is available), and keep it in the development loop
   rather than saving it for the end.
-- When dispatching subagents or dynamic workflows, spread work sensibly across
-  models by speed, intelligence, and cost. Not everything needs the most
-  expensive model.
+
+## Dispatching work
+
+Whenever work leaves your own context — dynamic workflows, subagents, background
+tasks, scheduled jobs, parallel fan-out, anything — balance the models used
+across intelligence and speed rather than sending every step to one tier. Match
+the model to the step: fast and cheap for mechanical scans, fan-out, and
+summarisation; the strongest available for design, adversarial review, and final
+synthesis. Prefer a mix over a single tier by default, and say which tier a step
+is using when it matters.
 
 ## Skills and MCP
 
