@@ -1,10 +1,12 @@
+# ─── Agent local state ────────────────────────────────────
+.claude/settings.local.json
+.claude/worktrees/
+.agent-tools/
+
 # ─── Secrets & env ────────────────────────────────────────
 .env
 .env.*
 !.env.example
-*.env
-*.env.local
-*.env.*.local
 secrets.*
 credentials.*
 *-credentials.md
@@ -27,32 +29,19 @@ google-credentials*.json
 
 # Auth / session state
 .auth/
-auth_info/
-auth_info_*/
-baileys_auth_info/
-.wwebjs_auth/
-whatsapp-session*/
 tokens.json
 .netrc
-
-# ─── Agent local state ────────────────────────────────────
-.claude/settings.local.json
 
 # ─── Node ─────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnp.*
 .yarn/
 
 # ─── Python ───────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*$py.class
 .venv/
 venv/
-env/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
@@ -63,23 +52,18 @@ dist/
 build/
 out/
 .next/
-.nuxt/
 coverage/
 
 # ─── Logs / runtime ───────────────────────────────────────
 *.log
 logs/
-pids/
 *.pid
-*.seed
 
 # ─── Editors / OS ─────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
 *.swp
-*.swo
 *~
 
 # ─── Local data ───────────────────────────────────────────
