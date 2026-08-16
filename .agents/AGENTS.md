@@ -51,9 +51,10 @@ have no equivalent and receive the server's whole tool surface.
   `.cursor/mcp.json`, `.codex/config.toml`, or `.gemini/settings.json`.
 - `.claude/settings.json` and `.gemini/settings.json` are hand-owned except for
   their `enabledMcpjsonServers` and `mcpServers` keys, which the sync rewrites.
-- Agent-specific configuration stays put. `.cursor/rules/*.mdc` uses glob
-  scoping and conditional loading with no equivalent elsewhere — do not convert
-  it into a skill. Knowledge every agent needs belongs in `AGENTS.md`.
+- Agent-specific configuration stays put. `.cursor/rules/*.mdc` and
+  `.github/instructions/*.instructions.md` use glob scoping and conditional
+  loading with no equivalent elsewhere — do not convert them into skills.
+  Knowledge every agent needs belongs in `AGENTS.md`.
 - Keep secrets and machine-local configuration out of committed files.
 - Run the pre-commit hooks or their underlying scripts before committing. GitHub
   Actions enforces the same checks for pull requests and `main`.

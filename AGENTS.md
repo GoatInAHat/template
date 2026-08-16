@@ -8,7 +8,8 @@ of truth, and what it must not touch.>
 | Path | Purpose |
 |---|---|
 | `.agents/` | Canonical shared skills, MCP definitions, and adapter scripts. |
-| `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, `.mcp.json` | Agent adapters. Generated files must not be edited directly. |
+| `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, `.github/`, `.mcp.json` | Agent adapters. Generated files must not be edited directly. |
+| `.devcontainer/` | Container definition for Codespaces and local devcontainers. |
 
 ## Code quality
 
@@ -25,6 +26,20 @@ of truth, and what it must not touch.>
 - When dispatching subagents or dynamic workflows, spread work sensibly across
   models by speed, intelligence, and cost. Not everything needs the most
   expensive model.
+
+## Skills and MCP
+
+- **Ponytail is always on**, at its default `full` intensity, for every coding
+  task here. Read `.agents/skills/ponytail/SKILL.md` and apply it on every
+  response; keep it active unless the user explicitly changes intensity or turns
+  it off. `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`,
+  and `ponytail-review` are pinned beside it.
+- **find-skills** covers skill discovery — reach for it when a task looks like
+  something an installable skill already does.
+- **Context7** is registered for library documentation: `resolve-library-id`
+  then `query-docs`, rather than recalling an API from memory. It works
+  unauthenticated at a lower rate limit; set `CONTEXT7_API_KEY` and add the
+  `Authorization: Bearer` header for your harness to raise it.
 
 ## Agent configuration
 

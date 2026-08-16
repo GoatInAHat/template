@@ -1,7 +1,10 @@
 {
-  "name": "agent-agnostic",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "name": "devcontainer",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/python:1": {}
   },
   "postCreateCommand": "bash .agents/scripts/bootstrap.sh"
