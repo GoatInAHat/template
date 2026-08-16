@@ -1,0 +1,90 @@
+# ─── Secrets & env ────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+*.env.local
+*.env.*.local
+secrets.*
+credentials.*
+*-credentials.md
+
+# Keys & certs
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.gpg
+service-account*.json
+gcp-*.json
+google-credentials*.json
+
+# Auth / session state
+.auth/
+auth_info/
+auth_info_*/
+baileys_auth_info/
+.wwebjs_auth/
+whatsapp-session*/
+tokens.json
+.netrc
+
+# ─── Agent local state ────────────────────────────────────
+.claude/settings.local.json
+
+# ─── Node ─────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.*
+.yarn/
+
+# ─── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Build / dist ─────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+
+# ─── Logs / runtime ───────────────────────────────────────
+*.log
+logs/
+pids/
+*.pid
+*.seed
+
+# ─── Editors / OS ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── Local data ───────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+tmp/
+.cache/
