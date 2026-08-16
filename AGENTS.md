@@ -76,6 +76,17 @@ is using when it matters.
 - Never commit credentials. Secrets come from the environment or an ignored
   `.env`; `.env.example` documents the variables.
 
+## Documentation
+
+- Write `README.md` once the project has enough shape to describe honestly: what
+  it is, how to run it, how to test it. Keep it clean and minimal — no feature
+  tour, no roadmap, no badges. Until then, don't write a placeholder.
+- Update the README in the same change that makes it wrong, not later.
+- Keep this file current as the project changes, and keep it small. It loads into
+  every agent's context on every session, so it pays rent: record only what
+  changes an agent's behaviour, drop anything the code or `--help` already says,
+  and prefer one precise line to a paragraph.
+
 ## Validation
 
 Run the checks relevant to the files changed:
