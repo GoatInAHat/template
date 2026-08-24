@@ -138,6 +138,12 @@ def merged_document(path, key, value):
 for path, (key, value) in managed_keys.items():
     outputs[path] = merged_document(path, key, value)
 
+# Only managed_keys paths stay committed (a harness reads them before any
+# setup script runs, so they can't be purely generated); the rest of
+# `outputs` is gitignored and regenerated fresh on every bootstrap, so it has
+# no "already on disk and correct" invariant for `check` to enforce.
+tracked_outputs = {path: outputs[path] for path in managed_keys}
+
 
 def atomic_write(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +162,7 @@ def atomic_write(path, content):
 
 if mode == "check":
     stale = []
-    for path, expected in outputs.items():
+    for path, expected in tracked_outputs.items():
         try:
             current = path.read_text(encoding="utf-8")
         except OSError:
@@ -164,12 +170,12 @@ if mode == "check":
         if current != expected:
             stale.append(path.relative_to(repo_root))
     if stale:
-        print("Stale MCP adapters:", file=sys.stderr)
+        print("Stale tracked MCP adapter keys:", file=sys.stderr)
         for path in stale:
             print(f"  {path}", file=sys.stderr)
         print("Run .agents/scripts/sync-mcp.sh to regenerate them.", file=sys.stderr)
         raise SystemExit(1)
-    print("MCP adapters are current.")
+    print("Tracked MCP adapter keys are current.")
 elif mode == "sync":
     for path, content in outputs.items():
         atomic_write(path, content)

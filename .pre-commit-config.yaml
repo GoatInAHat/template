@@ -3,8 +3,8 @@ repos:
     hooks:
       - id: link-agent-skills
         name: Sync agent skill symlinks
-        entry: bash -c 'set -e; .agents/scripts/link-skills.sh; unstaged="$(git ls-files --others --exclude-standard -- .claude/skills .cursor/skills)"; [ -z "$unstaged" ] || { echo "Unstaged skill links (git add them):"; echo "$unstaged"; exit 1; }'
-        language: system
+        entry: .agents/scripts/link-skills.sh
+        language: script
         always_run: true
         pass_filenames: false
       - id: lock-agent-skills

@@ -56,29 +56,31 @@ jobs:
                   .claude/hooks/session-start.sh
           python3 -m py_compile .agents/scripts/check-skills.py
 
+      - name: Verify MCP adapters
+        # Must run before bootstrap: it checks the committed
+        # enabledMcpjsonServers key in .claude/settings.json against
+        # .agents/mcp/servers.json as checked out, before anything
+        # regenerates it. .mcp.json and friends are gitignored and have no
+        # committed state to drift-check, so this only covers that one key.
+        run: .agents/scripts/sync-mcp.sh check
+
+      - name: Verify skill lock
+        run: .agents/scripts/check-skills.py
+
+      - name: Bootstrap environment
+        # Regenerates every gitignored agent adapter (skill symlinks, MCP
+        # configs) so the steps below can validate them.
+        run: .agents/scripts/bootstrap.sh
+
       - name: Verify skill links
         shell: bash
         run: |
-          .agents/scripts/link-skills.sh
-
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Skill links are stale. Run .agents/scripts/link-skills.sh and commit the result."
-            git status --short
-            exit 1
-          fi
-
           broken_links="$(find .claude/skills .cursor/skills -type l ! -exec test -e {} \; -print)"
           if [ -n "$broken_links" ]; then
             echo "Broken skill links:"
             echo "$broken_links"
             exit 1
           fi
-
-      - name: Verify skill lock
-        run: .agents/scripts/check-skills.py
-
-      - name: Verify MCP adapters
-        run: .agents/scripts/sync-mcp.sh check
 
       - name: Validate generated configuration syntax
         shell: bash
@@ -113,9 +115,6 @@ jobs:
             echo "Tracked files contain trailing whitespace."
             exit 1
           fi
-
-      - name: Test environment bootstrap
-        run: .agents/scripts/bootstrap.sh
 
       - name: Run pre-commit hooks
         shell: bash

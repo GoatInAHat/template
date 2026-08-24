@@ -3,6 +3,19 @@
 .claude/worktrees/
 .agent-tools/
 
+# ─── Generated agent adapters ─────────────────────────────
+# Written wholesale by .agents/scripts/link-skills.sh and sync-mcp.sh on
+# every bootstrap run; nothing here is a bootstrap entry point, so none of it
+# needs to exist before that script runs, and none of it carries any
+# hand-authored content. Do not hand-edit or commit these. (.claude/settings.json
+# and .gemini/settings.json are similar but stay committed — a generator
+# only owns one key in each, the rest is left to hand-editing.)
+/.mcp.json
+.cursor/mcp.json
+.cursor/skills/
+.codex/config.toml
+.claude/skills/
+
 # ─── Secrets & env ────────────────────────────────────────
 .env
 .env.*
