@@ -8,7 +8,7 @@ of truth, and what it must not touch.>
 | Path | Purpose |
 |---|---|
 | `.agents/` | Canonical shared skills, MCP definitions, and adapter scripts. |
-| `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, `.github/`, `.mcp.json` | Agent adapters. Generated files must not be edited directly. |
+| `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, `.github/`, `.mcp.json` | Agent adapters. Most files are generated and gitignored — never edit or commit them directly. `.claude/settings.json` and `.gemini/settings.json` stay committed because a generator only owns one key in each and the rest is hand-edited; `.claude/hooks/session-start.sh`, `.codex/environments/environment.toml`, and everything under `.github/` stay committed because a harness reads them before any setup script can run. |
 | `.devcontainer/` | Container definition for Codespaces and local devcontainers. |
 
 ## Code quality
@@ -73,6 +73,20 @@ is using when it matters.
 - Repo-local `.codex/config.toml` is generated for parity but is not loaded
   automatically by the Codex CLI. Run `.agents/scripts/sync-mcp.sh install-codex`
   only when the user wants this repo's MCP servers in their user config.
+- `.mcp.json`, `.cursor/mcp.json`, `.cursor/skills/`, `.codex/config.toml`,
+  and `.claude/skills/` are gitignored — `bootstrap.sh` recreates them every
+  run, so a fresh checkout has none of them until it runs. They stay out of
+  git because nothing reads them before that script can generate them, and
+  nothing in them is hand-authored.
+- `.claude/settings.json` and `.gemini/settings.json` stay committed even
+  though `sync-mcp.sh` writes into them: it only owns one key in each
+  (`enabledMcpjsonServers`, `mcpServers`) and merges it into whatever the
+  rest of the file already says, so any other hand-authored keys survive a
+  regen. Files a harness reads to *find* the setup script in the first place
+  (`.claude/settings.json`'s hook registration, `.claude/hooks/session-start.sh`,
+  `.codex/environments/environment.toml`, `.github/workflows/agent-config.yml`)
+  stay committed for the same reason `.gitignore`-ing them would break: they
+  have to exist before that script can run at all.
 - Never commit credentials. Secrets come from the environment or an ignored
   `.env`; `.env.example` documents the variables.
 
@@ -99,8 +113,9 @@ git diff --check
 pre-commit run --all-files
 ```
 
-Verify that every committed symlink resolves and review the final diff before
-committing. Use focused, imperative commit messages and avoid combining
+Verify that every generated symlink under `.claude/skills/` and
+`.cursor/skills/` resolves and review the final diff before committing. Use
+focused, imperative commit messages and avoid combining
 unrelated changes. GitHub Actions runs the same agent-configuration checks on
 pull requests and pushes to `main`; treat that workflow as the enforcement
 layer. Don't leave work finished but unsynced with the remote, and don't leave
