@@ -1,0 +1,25 @@
+# GitHub Copilot's coding agent runs the `copilot-setup-steps` job before the
+# agent gets control; it does not honor .devcontainer/. The push/pull_request
+# triggers exist only so edits to this file validate in CI.
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/copilot-setup-steps.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/copilot-setup-steps.yml'
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Bootstrap agent environment
+        run: .agents/scripts/bootstrap.sh

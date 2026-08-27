@@ -4,17 +4,29 @@
 .agent-tools/
 
 # ─── Generated agent adapters ─────────────────────────────
-# Written wholesale by .agents/scripts/link-skills.sh and sync-mcp.sh on
-# every bootstrap run; nothing here is a bootstrap entry point, so none of it
-# needs to exist before that script runs, and none of it carries any
-# hand-authored content. Do not hand-edit or commit these. (.claude/settings.json
-# and .gemini/settings.json are similar but stay committed — a generator
-# only owns one key in each, the rest is left to hand-editing.)
+# Written wholesale by .agents/scripts/sync.py (via bootstrap.sh) for the
+# harnesses detected on this machine; nothing here is a bootstrap entry point,
+# so none of it needs to exist before that script runs, and none of it carries
+# any hand-authored content. Do not hand-edit or commit these.
+# (.claude/settings.json and .gemini/settings.json are similar but stay
+# committed — the generator only owns one key in each, the rest is
+# hand-edited. CI fails if a sync.py output ever shows up untracked here,
+# so keep this list in step with sync.py's renderers.)
 /.mcp.json
-.cursor/mcp.json
-.cursor/skills/
-.codex/config.toml
-.claude/skills/
+/.claude/skills/
+/.cursor/mcp.json
+/.codex/config.toml
+/.vscode/mcp.json
+/opencode.json
+/kilo.jsonc
+/.factory/mcp.json
+/.qwen/settings.json
+/.amp/settings.json
+/.windsurf/skills/
+/.hermes/skills/
+/.trae/skills/
+/.augment/skills/
+/.codebuddy/skills/
 
 # ─── Secrets & env ────────────────────────────────────────
 .env

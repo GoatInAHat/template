@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Agent-agnostic environment setup for a fresh checkout.
 #
-# Safe to re-run; every step is idempotent. Works locally and in remote agent
-# containers (Claude Code on the web, Codex cloud, Codespaces, CI).
+# Safe to re-run; every step is idempotent and non-interactive. Every
+# environment calls this same script through its native hook — see the
+# environments table in .agents/README.md.
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -19,10 +20,10 @@ if ! command -v pre-commit >/dev/null 2>&1; then
     fi
 fi
 
-.agents/scripts/link-skills.sh
-.agents/scripts/sync-mcp.sh
+.agents/scripts/sync.py "$@"
 .agents/scripts/check-skills.py
 pre-commit install
 
 # Project setup goes here (dependency install, codegen, migrations). Keep it
-# idempotent so every harness can call this script on every session start.
+# idempotent and fast when there is nothing to do, so every harness can call
+# this script on every session start.

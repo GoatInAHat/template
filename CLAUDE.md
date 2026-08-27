@@ -1,4 +1,5 @@
 @AGENTS.md
 
-This repo keeps reusable agent assets in `.agents/` and syncs tool-specific
-adapters with `.agents/scripts/`.
+This repo keeps all reusable agent assets in `.agents/` and generates
+tool-specific adapters from it with `.agents/scripts/sync.py`; generated
+adapters are gitignored.
