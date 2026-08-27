@@ -48,6 +48,13 @@ summarisation; the strongest available for design, adversarial review, and final
 synthesis. Prefer a mix over a single tier by default, and say which tier a step
 is using when it matters.
 
+Concretely, in `Workflow` scripts set `model:` per `agent()` call — omitting it
+inherits the session's strongest tier for every step, which is exactly the
+failure mode. A deliberately single-tier workflow states why in a
+`// single-tier: <reason>` comment; a committed Claude Code hook
+(`.claude/hooks/workflow-model-mix.py`) blocks multi-agent scripts that do
+neither.
+
 ## Skills and MCP
 
 - **Ponytail is always on**, at its default `full` intensity, for every coding

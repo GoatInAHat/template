@@ -51,7 +51,9 @@ jobs:
           bash -n .agents/scripts/bootstrap.sh \
                   .agents/setup \
                   .claude/hooks/session-start.sh
-          python3 -m py_compile .agents/scripts/sync.py .agents/scripts/check-skills.py
+          python3 -m py_compile .agents/scripts/sync.py \
+                                .agents/scripts/check-skills.py \
+                                .claude/hooks/workflow-model-mix.py
 
       - name: Verify managed keys in committed seeds
         # Must run before bootstrap: it checks the committed
