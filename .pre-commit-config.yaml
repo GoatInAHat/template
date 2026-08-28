@@ -1,8 +1,8 @@
 repos:
   - repo: local
     hooks:
-      - id: check-agent-sync
-        name: Verify managed keys in committed agent seeds
+      - id: check-agent-adapters
+        name: Verify no generated agent adapter is committed
         entry: .agents/scripts/sync.py check
         language: script
         always_run: true
