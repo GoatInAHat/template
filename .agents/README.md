@@ -17,7 +17,7 @@ format. Rendered adapters are gitignored and recreated per checkout.
 
 # Render adapters for every known harness / a specific one
 .agents/scripts/sync.py --all
-.agents/scripts/sync.py windsurf
+.agents/scripts/sync.py opencode
 
 # Show the harness table: detection state and what each gets
 .agents/scripts/sync.py list

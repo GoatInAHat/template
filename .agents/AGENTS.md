@@ -12,10 +12,12 @@ Every piece of agent configuration is one of three things:
 | **Seed** — a harness reads it straight from the clone, before any script can run | Committed in the harness's own location, kept minimal: hook and environment registrations, one managed key per settings file |
 | **Generated** — everything else a harness wants | Rendered by `scripts/sync.py`, gitignored, recreated per checkout for the harnesses detected on that machine |
 
-Most harnesses need no generated adapter at all: `AGENTS.md` and
+Instructions and skills need almost no adapters: `AGENTS.md` and
 `.agents/skills/` are read natively by Codex, Cursor, Copilot's coding agent,
-OpenCode, Amp, Factory, Goose, Zed, Crush, Kilo, Antigravity, dsh, and gsd,
-among others. `sync.py list` shows the full table.
+OpenCode, Amp, Factory, Windsurf, Hermes, Trae, Augment, Goose, Zed, Crush,
+Kilo, Antigravity, dsh, and gsd, among others — only Claude Code and CodeBuddy
+get generated skill symlinks. What `sync.py` mostly renders is MCP configs for
+tools with a project-level MCP surface; `sync.py list` shows the full table.
 
 ## Layout
 

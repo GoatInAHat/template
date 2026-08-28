@@ -8,7 +8,7 @@ of truth, and what it must not touch.>
 | Path | Purpose |
 |---|---|
 | `.agents/` | The one canonical agent folder: shared skills, MCP definitions, scripts, and the `setup` entry shim. Everything agent-related is edited here and only here. |
-| `.claude/`, `.cursor/`, `.gemini/`, `.github/` | Committed seeds only: files a harness reads straight from the clone before any script can run (hook and environment registrations, one managed key per settings file). Everything else a harness needs is generated from `.agents/` and gitignored — never edit or commit generated adapters. |
+| `.claude/`, `.cursor/`, `.gemini/`, `.github/` | Committed seeds (files a harness reads straight from the clone before any script can run: hook and environment registrations, one managed key per settings file) plus CI enforcement under `.github/workflows/`. Everything else a harness needs is generated from `.agents/` and gitignored — never edit or commit generated adapters. |
 | `.devcontainer/` | Container definition for Codespaces, Ona, and local devcontainers. |
 
 ## Code quality
@@ -77,29 +77,24 @@ neither.
   cloud, Jules, Devin, Factory) take that same line in their UI setup field.
 - Edit shared skills only in `.agents/skills/`; edit MCP servers only in
   `.agents/mcp/servers.json`; then run `.agents/scripts/sync.py`. It renders
-  adapters for the harnesses detected on this machine (`--all` for every
-  harness, `list` to see the table). Most harnesses — including dsh, Codex,
-  Cursor, Copilot's coding agent, OpenCode, Amp, Goose, Zed, Crush, and Kilo —
-  read `AGENTS.md` and `.agents/skills/` natively and need no adapter at all.
-- Generated adapters (`.mcp.json`, `.claude/skills/`, `.cursor/mcp.json`,
-  `.codex/config.toml`, `.vscode/mcp.json`, `opencode.json`, `kilo.jsonc`,
-  `.factory/mcp.json`, `.qwen/settings.json`, `.amp/settings.json`, and the
-  per-harness `*/skills/` link dirs) are gitignored: nothing reads them before
-  `sync.py` can generate them, and nothing in them is hand-authored. CI fails
-  if a generated file is not covered by `.gitignore`.
+  gitignored adapters for the harnesses detected on this machine (`--all` for
+  every harness, `list` for the full table of who gets what). Instructions and
+  skills ride the standards: harnesses read `AGENTS.md` (Claude Code through
+  the committed `CLAUDE.md` pointer, Gemini through the committed
+  `context.fileName` seed) and `.agents/skills/` (Claude Code and CodeBuddy
+  through generated symlinks). The rendered files are MCP configs for tools
+  with a project-level MCP surface; dsh has none (user-level `$DSH_HOME`
+  config only).
 - `.claude/settings.json` and `.gemini/settings.json` stay committed even
   though `sync.py` writes into them: it only owns one key in each
   (`enabledMcpjsonServers`, `mcpServers`) and merges it into whatever the rest
-  of the file already says. Files a harness reads to *find* the setup script
-  in the first place (`.claude/settings.json` + `.claude/hooks/session-start.sh`,
-  `.cursor/environment.json`, `.github/workflows/copilot-setup-steps.yml`,
-  `.agents/setup`, `.devcontainer/`) stay committed because they have to exist
-  before that script can run at all.
+  of the file already says. The other committed agent files are the hooks that
+  reach the setup script before it can run (see the repository-layout table);
+  everything else is generated, and CI fails if a generated file is not
+  covered by `.gitignore`.
 - Codex loads a repo-local `.codex/config.toml` only for trusted projects; run
   `.agents/scripts/sync.py install-codex` only when the user wants this repo's
-  MCP servers in their user-level Codex config instead. dsh has no
-  project-level MCP surface at all (user-level `$DSH_HOME` config only) —
-  its skills and instructions come from `.agents/skills/` and `AGENTS.md`.
+  MCP servers in their user-level Codex config instead.
 - Never commit credentials. Secrets come from the environment or an ignored
   `.env`; `.env.example` documents the variables.
 

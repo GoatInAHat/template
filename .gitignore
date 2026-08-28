@@ -22,10 +22,6 @@
 /.factory/mcp.json
 /.qwen/settings.json
 /.amp/settings.json
-/.windsurf/skills/
-/.hermes/skills/
-/.trae/skills/
-/.augment/skills/
 /.codebuddy/skills/
 
 # ─── Secrets & env ────────────────────────────────────────

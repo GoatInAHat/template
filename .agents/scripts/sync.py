@@ -22,9 +22,10 @@ Usage:
   sync.py install-codex   install this repo's MCP block into ~/.codex/config.toml
 
 Harnesses that read AGENTS.md and .agents/skills/ natively need no adapter and
-no entry here: dsh (DeepSeek Harness), Goose, Zed, Crush, Cline, Antigravity,
-Jules, Devin, gsd. Copilot's cloud coding agent also reads both natively; the
-`vscode` entry below covers local VS Code, which wants .vscode/mcp.json.
+no entry here: dsh (DeepSeek Harness), Windsurf, Hermes, Trae, Augment, Goose,
+Zed, Crush, Cline, Antigravity, Jules, Devin, gsd. Copilot's cloud coding agent
+also reads both natively; the `vscode` entry below covers local VS Code, which
+wants .vscode/mcp.json.
 """
 import json
 import os
@@ -39,29 +40,31 @@ SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
 SERVERS_PATH = REPO_ROOT / ".agents" / "mcp" / "servers.json"
 
 # Each harness: how to detect it on this machine (env vars set, commands on
-# PATH, directories under $HOME or the project), where its per-skill symlinks
-# go (None = it reads .agents/skills natively), and which MCP renderer feeds it
-# (None = it has no project-scoped MCP file).
+# PATH, directories under $HOME), where its per-skill symlinks go (None = it
+# reads .agents/skills natively), and which MCP renderer feeds it (None = no
+# generated project-scoped MCP file). Detection never probes a path sync.py
+# itself creates — one run would make that harness sticky-detected.
 HARNESSES = {
     "claude":    {"env": ["CLAUDECODE", "CLAUDE_CODE_REMOTE"], "cmd": ["claude"], "home": [".claude"], "skills": ".claude/skills", "mcp": "claude"},
     "codex":     {"cmd": ["codex"], "home": [".codex"], "skills": None, "mcp": "codex"},
     "cursor":    {"cmd": ["cursor-agent", "cursor"], "home": [".cursor"], "skills": None, "mcp": "cursor"},
-    "gemini":    {"cmd": ["gemini"], "home": [".gemini"], "skills": None, "mcp": "gemini"},
+    "gemini":    {"cmd": ["gemini"], "home": [".gemini"], "skills": None, "mcp": None,
+                  "note": "mcp → .gemini/settings.json (committed seed, always synced)"},
     "qwen":      {"cmd": ["qwen"], "home": [".qwen"], "skills": None, "mcp": "qwen"},
     "opencode":  {"cmd": ["opencode"], "home": [".config/opencode"], "skills": None, "mcp": "opencode"},
-    "vscode":    {"cmd": ["code"], "project": [".vscode"], "skills": None, "mcp": "vscode"},
+    "vscode":    {"cmd": ["code"], "skills": None, "mcp": "vscode"},
     "kilo":      {"cmd": ["kilo"], "home": [".config/kilo"], "skills": None, "mcp": "kilo"},
     "factory":   {"cmd": ["droid"], "home": [".factory"], "skills": None, "mcp": "factory"},
     "amp":       {"cmd": ["amp"], "home": [".amp"], "skills": None, "mcp": "amp"},
-    "windsurf":  {"home": [".codeium"], "project": [".windsurf"], "skills": ".windsurf/skills", "mcp": None},
-    "hermes":    {"cmd": ["hermes"], "home": [".hermes"], "skills": ".hermes/skills", "mcp": None},
-    "trae":      {"home": [".trae"], "project": [".trae"], "skills": ".trae/skills", "mcp": None},
-    "augment":   {"cmd": ["auggie"], "home": [".augment"], "skills": ".augment/skills", "mcp": None},
     "codebuddy": {"cmd": ["codebuddy"], "home": [".codebuddy"], "skills": ".codebuddy/skills", "mcp": None},
 }
 
 # Read AGENTS.md and .agents/skills/ natively; listed so `list` can say so.
-NATIVE = ("dsh", "goose", "zed", "crush", "cline", "antigravity", "jules", "devin", "gsd")
+# Windsurf, Hermes, Trae, and Augment scan .agents/skills/ alongside their own
+# dirs per their current docs, so they need no symlink adapter (only CodeBuddy
+# still does).
+NATIVE = ("dsh", "windsurf", "hermes", "trae", "augment", "goose", "zed",
+          "crush", "cline", "antigravity", "jules", "devin", "gsd")
 
 
 def detected(spec):
@@ -69,7 +72,6 @@ def detected(spec):
         any(os.environ.get(var) for var in spec.get("env", ()))
         or any(shutil.which(cmd) for cmd in spec.get("cmd", ()))
         or any((Path.home() / rel).exists() for rel in spec.get("home", ()))
-        or any((REPO_ROOT / rel).exists() for rel in spec.get("project", ()))
     )
 
 
@@ -85,6 +87,8 @@ def load_servers():
             raise SystemExit("ERROR: every MCP server must have a non-empty string name")
         if not isinstance(config, dict):
             raise SystemExit(f"ERROR: MCP server {name!r} must contain an object")
+        if not isinstance(config.get("url"), str) and not isinstance(config.get("command"), str):
+            raise SystemExit(f"ERROR: MCP server {name!r} needs a `url` or a `command`")
         tools = config.get("tools")
         if tools is not None and not (
             isinstance(tools, list) and all(isinstance(tool, str) and tool for tool in tools)
@@ -134,7 +138,7 @@ def render_vscode(servers):
     rendered = {}
     for name, config in servers.items():
         body = body_of(config)
-        body["type"] = "http" if is_remote(body) else "stdio"
+        body.setdefault("type", "http" if is_remote(body) else "stdio")
         rendered[name] = body
     return {".vscode/mcp.json": json_document({"servers": rendered})}
 
@@ -152,11 +156,6 @@ def gemini_servers(servers):
             body["includeTools"] = list(config["tools"])
         rendered[name] = body
     return rendered
-
-
-def render_gemini(servers):
-    # Merged into the committed .gemini/settings.json; handled as a seed.
-    return {}
 
 
 def render_qwen(servers):
@@ -194,7 +193,7 @@ def render_factory(servers):
     rendered = {}
     for name, config in servers.items():
         body = body_of(config)
-        body["type"] = body.get("type", "http" if is_remote(body) else "stdio")
+        body.setdefault("type", "http" if is_remote(body) else "stdio")
         rendered[name] = body
     return {".factory/mcp.json": json_document({"mcpServers": rendered})}
 
@@ -216,7 +215,7 @@ def toml_value(value):
         return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, list):
         return "[" + ", ".join(toml_value(item) for item in value) + "]"
@@ -249,7 +248,6 @@ MCP_RENDERERS = {
     "claude": render_claude,
     "codex": render_codex,
     "cursor": render_cursor,
-    "gemini": render_gemini,
     "qwen": render_qwen,
     "opencode": render_opencode,
     "vscode": render_vscode,
@@ -293,6 +291,8 @@ def seed_outputs(servers):
 
 
 def sync_skills(target_rel):
+    if not SKILLS_ROOT.is_dir():
+        return
     target_dir = REPO_ROOT / target_rel
     target_dir.mkdir(parents=True, exist_ok=True)
     link_prefix = Path(os.path.relpath(SKILLS_ROOT, target_dir))
@@ -327,9 +327,11 @@ def atomic_write(path, content):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(content)
-        umask = os.umask(0)
-        os.umask(umask)
-        os.chmod(temporary, 0o666 & ~umask)
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            mode = 0o644
+        os.chmod(temporary, mode)
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
@@ -345,10 +347,12 @@ def active_harnesses(arguments):
     for name in named:
         if name in NATIVE:
             print(f"{name}: reads AGENTS.md and .agents/skills natively, nothing to generate")
-    if "--all" in arguments or os.environ.get("GITHUB_ACTIONS") == "true":
+    if "--all" in arguments:
         return list(HARNESSES)
     if named:
         return [name for name in named if name in HARNESSES]
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return list(HARNESSES)
     return [name for name, spec in HARNESSES.items() if detected(spec)]
 
 
@@ -400,8 +404,9 @@ def list_harnesses():
         if spec["skills"]:
             adapters.append(f"skills → {spec['skills']}")
         if spec["mcp"]:
-            targets = MCP_RENDERERS[spec["mcp"]](servers) or {".gemini/settings.json (seed)": None}
-            adapters.append("mcp → " + ", ".join(targets))
+            adapters.append("mcp → " + ", ".join(MCP_RENDERERS[spec["mcp"]](servers)))
+        if spec.get("note"):
+            adapters.append(spec["note"])
         state = "detected" if detected(spec) else "not detected"
         print(f"{name:10} {state:13} {'; '.join(adapters)}")
     print(f"{'native':10} {'—':13} AGENTS.md + .agents/skills, no adapter: {', '.join(NATIVE)}")
