@@ -7,9 +7,9 @@ of truth, and what it must not touch.>
 
 | Path | Purpose |
 |---|---|
-| `.agents/` | Canonical shared skills, MCP definitions, and adapter scripts. |
-| `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, `.github/`, `.mcp.json` | Agent adapters. Most files are generated and gitignored — never edit or commit them directly. `.claude/settings.json` and `.gemini/settings.json` stay committed because a generator only owns one key in each and the rest is hand-edited; `.claude/hooks/session-start.sh`, `.codex/environments/environment.toml`, and everything under `.github/` stay committed because a harness reads them before any setup script can run. |
-| `.devcontainer/` | Container definition for Codespaces and local devcontainers. |
+| `.agents/` | The one canonical agent folder: shared skills, MCP definitions, scripts, and the `setup` entry shim. Everything agent-related is edited here and only here. |
+| `.claude/`, `.cursor/`, `.gemini/`, `.github/` | Committed seeds (files a harness reads straight from the clone before any script can run: hook and environment registrations, one managed key per settings file) plus CI enforcement under `.github/workflows/`. Everything else a harness needs is generated from `.agents/` and gitignored — never edit or commit generated adapters. |
+| `.devcontainer/` | Container definition for Codespaces, Ona, and local devcontainers. |
 
 ## Code quality
 
@@ -48,6 +48,13 @@ summarisation; the strongest available for design, adversarial review, and final
 synthesis. Prefer a mix over a single tier by default, and say which tier a step
 is using when it matters.
 
+Concretely, in `Workflow` scripts set `model:` per `agent()` call — omitting it
+inherits the session's strongest tier for every step, which is exactly the
+failure mode. A deliberately single-tier workflow states why in a
+`// single-tier: <reason>` comment; a committed Claude Code hook
+(`.claude/hooks/workflow-model-mix.py`) blocks multi-agent scripts that do
+neither.
+
 ## Skills and MCP
 
 - **Ponytail is always on**, at its default `full` intensity, for every coding
@@ -65,28 +72,29 @@ is using when it matters.
 ## Agent configuration
 
 - Run `.agents/scripts/bootstrap.sh` once per fresh checkout. It is idempotent
-  and is what every cloud environment runs on startup.
-- Edit shared skills only in `.agents/skills/`, then run
-  `.agents/scripts/link-skills.sh`.
-- Edit MCP servers only in `.agents/mcp/servers.json`, then run
-  `.agents/scripts/sync-mcp.sh`.
-- Repo-local `.codex/config.toml` is generated for parity but is not loaded
-  automatically by the Codex CLI. Run `.agents/scripts/sync-mcp.sh install-codex`
-  only when the user wants this repo's MCP servers in their user config.
-- `.mcp.json`, `.cursor/mcp.json`, `.cursor/skills/`, `.codex/config.toml`,
-  and `.claude/skills/` are gitignored — `bootstrap.sh` recreates them every
-  run, so a fresh checkout has none of them until it runs. They stay out of
-  git because nothing reads them before that script can generate them, and
-  nothing in them is hand-authored.
+  and is what every cloud environment runs on startup — see the environments
+  table in `.agents/README.md`. Environments with no in-repo hook (Codex
+  cloud, Jules, Devin, Factory) take that same line in their UI setup field.
+- Edit shared skills only in `.agents/skills/`; edit MCP servers only in
+  `.agents/mcp/servers.json`; then run `.agents/scripts/sync.py`. It renders
+  gitignored adapters for the harnesses detected on this machine (`--all` for
+  every harness, `list` for the full table of who gets what). Instructions and
+  skills ride the standards: harnesses read `AGENTS.md` (Claude Code through
+  the committed `CLAUDE.md` pointer, Gemini through the committed
+  `context.fileName` seed) and `.agents/skills/` (Claude Code and CodeBuddy
+  through generated symlinks). The rendered files are MCP configs for tools
+  with a project-level MCP surface; dsh has none (user-level `$DSH_HOME`
+  config only).
 - `.claude/settings.json` and `.gemini/settings.json` stay committed even
-  though `sync-mcp.sh` writes into them: it only owns one key in each
-  (`enabledMcpjsonServers`, `mcpServers`) and merges it into whatever the
-  rest of the file already says, so any other hand-authored keys survive a
-  regen. Files a harness reads to *find* the setup script in the first place
-  (`.claude/settings.json`'s hook registration, `.claude/hooks/session-start.sh`,
-  `.codex/environments/environment.toml`, `.github/workflows/agent-config.yml`)
-  stay committed for the same reason `.gitignore`-ing them would break: they
-  have to exist before that script can run at all.
+  though `sync.py` writes into them: it only owns one key in each
+  (`enabledMcpjsonServers`, `mcpServers`) and merges it into whatever the rest
+  of the file already says. The other committed agent files are the hooks that
+  reach the setup script before it can run (see the repository-layout table);
+  everything else is generated, and CI fails if a generated file is not
+  covered by `.gitignore`.
+- Codex loads a repo-local `.codex/config.toml` only for trusted projects; run
+  `.agents/scripts/sync.py install-codex` only when the user wants this repo's
+  MCP servers in their user-level Codex config instead.
 - Never commit credentials. Secrets come from the environment or an ignored
   `.env`; `.env.example` documents the variables.
 
@@ -106,15 +114,14 @@ is using when it matters.
 Run the checks relevant to the files changed:
 
 ```bash
-.agents/scripts/link-skills.sh
-.agents/scripts/sync-mcp.sh check
+.agents/scripts/sync.py check
 .agents/scripts/check-skills.py
 git diff --check
 pre-commit run --all-files
 ```
 
-Verify that every generated symlink under `.claude/skills/` and
-`.cursor/skills/` resolves and review the final diff before committing. Use
+Verify that every generated skill symlink resolves and review the final diff
+before committing. Use
 focused, imperative commit messages and avoid combining
 unrelated changes. GitHub Actions runs the same agent-configuration checks on
 pull requests and pushes to `main`; treat that workflow as the enforcement

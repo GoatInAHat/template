@@ -1,0 +1,3 @@
+{
+  "install": ".agents/scripts/bootstrap.sh"
+}
