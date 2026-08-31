@@ -1,97 +1,27 @@
-# ─── Agent local state ────────────────────────────────────
-.claude/settings.local.json
-.claude/worktrees/
-.agent-tools/
-
-# ─── Generated agent adapters ─────────────────────────────
-# Written wholesale by .agents/scripts/sync.py (via bootstrap.sh) for the
-# harnesses detected on this machine. Nothing harness-specific is committed:
-# every file below is rendered from .agents/ per checkout and carries no
-# hand-authored content. Do not hand-edit or commit these. Keep the list in
-# step with sync.py's renderers — `sync.py check` fails if a renderer output
-# is unignored or tracked, and CI fails if a bootstrap run leaves an untracked
-# file behind.
-/CLAUDE.md
-/.mcp.json
-/.claude/settings.json
-/.claude/skills/
-/.gemini/settings.json
-/.cursor/mcp.json
-/.codex/config.toml
-/.vscode/mcp.json
-/opencode.json
-/kilo.jsonc
-/.factory/mcp.json
-/.qwen/settings.json
-/.amp/settings.json
-/.codebuddy/skills/
-
-# ─── Secrets & env ────────────────────────────────────────
+# Secrets — never committed; use the environment or an ignored .env.
 .env
 .env.*
 !.env.example
-secrets.*
-credentials.*
-*-credentials.md
-
-# Keys & certs
 *.pem
 *.key
-*.p12
-*.pfx
-*.crt
-*.cer
-id_rsa
-id_rsa.*
-id_ed25519
-id_ed25519.*
-*.gpg
-service-account*.json
-gcp-*.json
-google-credentials*.json
 
-# Auth / session state
-.auth/
-tokens.json
-.netrc
+# Agent-local files
+CLAUDE.local.md
+.claude/settings.local.json
 
-# ─── Node ─────────────────────────────────────────────────
-node_modules/
-npm-debug.log*
-.yarn/
-
-# ─── Python ───────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# ─── Build / dist ─────────────────────────────────────────
-dist/
-build/
-out/
-.next/
-coverage/
-
-# ─── Logs / runtime ───────────────────────────────────────
-*.log
-logs/
-*.pid
-
-# ─── Editors / OS ─────────────────────────────────────────
+# OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 *.swp
-*~
 
-# ─── Local data ───────────────────────────────────────────
-*.sqlite
-*.sqlite3
-*.db
+# Dependencies and build output — extend as the stack takes shape.
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+target/
+coverage/
+*.log
 tmp/
-.cache/
