@@ -65,12 +65,28 @@ shared canon.
 
 Every environment reaches the same `.agents/setup` through its native,
 committed hook — that one script is where project setup (dependencies,
-codegen) goes. It also installs [rtk](https://github.com/rtk-ai/rtk),
-best-effort, and hooks it into every agent rtk supports — the target list is
-read from rtk's own CLI, so new rtk targets need no template change. Agents
-whose rtk integration is a project instruction file, and agents rtk doesn't
-know, are covered instead by the rtk note in `AGENTS.md`, which they all
-read natively. `AGENTS.md` ships with
+codegen) goes.
+
+Setup is isolation-aware: outside an isolated environment it touches nothing
+beyond the repository, because a repo's setup must never rewrite personal
+agent configs on someone's own machine. Only where `$HOME` belongs to the
+project — a container or CI sandbox, detected by environment markers or the
+`--isolated` flag a sandbox-only hook passes — does it also install
+[rtk](https://github.com/rtk-ai/rtk) and hook it into every agent rtk
+supports, with the target list read from rtk's own CLI so new rtk targets
+need no template change. The devcontainer (the
+[Dev Containers](https://containers.dev) standard: Codespaces, VS Code,
+Cursor, DevPod, Ona, JetBrains) is the sanctioned way to get that isolation
+on your own machine. Agents whose rtk integration is a project instruction
+file, and agents rtk doesn't know, are covered by the rtk note in
+`AGENTS.md`, which they all read natively.
+
+The rtk version that first works is recorded in `.agents/rtk-version`,
+package-lock style, and later environments install exactly that release —
+graceful degradation, not surprise upgrades. Delete the file and re-run
+setup in a fresh environment to re-lock a newer release. CI never writes the
+lock, and the template ships unlocked so each project pins what it first
+verified. `AGENTS.md` ships with
 a one-time bootstrap notice for environments with no hook; the first
 successful run outside CI deletes it (the template repository itself,
 matched by the `keep=` slug in the notice's marker, keeps it).

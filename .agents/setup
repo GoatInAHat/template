@@ -2,13 +2,38 @@
 # The one setup entry point. Every environment calls this same script through
 # its native, committed hook — see the environments table in .agents/README.md
 # — so setup stays standardized instead of per-harness. Idempotent and
-# non-interactive; everything below the sync is best-effort so restricted
-# sandboxes still get a working checkout.
+# non-interactive. Outside an isolated environment it touches nothing beyond
+# this repository; only where $HOME belongs to the project — a container or
+# CI sandbox, which the devcontainer provides locally — does it also install
+# rtk and hook it into agent configs.
 set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
+# --isolated (passed by hooks that only ever run in project-owned sandboxes)
+# forces isolation; otherwise detect it. Remaining arguments go to sync.py.
+isolated=false
+for arg in "$@"; do
+    shift
+    if [ "$arg" = "--isolated" ]; then isolated=true; else set -- "$@" "$arg"; fi
+done
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ -f /.dockerenv ] ||
+    [ -n "${CODESPACES:-}${DEVCONTAINER:-}${REMOTE_CONTAINERS:-}${GITPOD_WORKSPACE_ID:-}${CI:-}${container:-}" ]; then
+    isolated=true
+fi
+
+# The template repository itself — origin matching the keep= slug in
+# AGENTS.md's bootstrap marker — keeps shipping that notice and never locks
+# tool versions; repos generated from it do both.
+is_template=false
+keep_slug="$(sed -n 's/.*<!-- setup keep=\([^ >]*\) -->.*/\1/p' AGENTS.md 2>/dev/null | head -n 1)"
+origin_url="$(git remote get-url origin 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+if [ -n "$keep_slug" ] && [ -n "$origin_url" ]; then
+    case "$origin_url" in
+        *"$(printf '%s' "$keep_slug" | tr '[:upper:]' '[:lower:]')"*) is_template=true ;;
+    esac
+fi
+
 # Adopt harness-local agent config into .agents/ and render adapters back out.
-# Arguments name additional harnesses to render (each hook passes its own).
 python3 .agents/sync.py "$@"
 
 # Native git hooks, since git runs nothing from a fresh clone by itself:
@@ -47,66 +72,78 @@ done
 
 # The bootstrap notice in AGENTS.md is for agents in environments where
 # nothing ran this script; once it has run, the hooks above make everything
-# automatic, so the notice deletes itself. Two exceptions keep the file
-# untouched: CI checkouts (a self-edit would dirty the tree), and the
-# template repository itself — identified by the marker's keep= slug
-# matching origin — which has to keep shipping the notice.
-if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+# automatic, so the notice deletes itself. CI keeps the file untouched (a
+# self-edit would dirty the tree), as does the template repository.
+if [ "${GITHUB_ACTIONS:-}" != "true" ] && [ "$is_template" != "true" ]; then
     python3 - <<'PY'
 import re
-import subprocess
 from pathlib import Path
 
 path = Path("AGENTS.md")
 text = path.read_text(encoding="utf-8") if path.is_file() else ""
-match = re.search(r"<!-- setup(?:\s+keep=(\S+))? -->\n.*?<!-- /setup -->\n*", text, re.S)
+match = re.search(r"<!-- setup[^>]* -->\n.*?<!-- /setup -->\n*", text, re.S)
 if match:
-    origin = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        capture_output=True, text=True, check=False,
-    ).stdout.strip().lower()
-    keep = match.group(1)
-    if not (keep and keep.lower() in origin):
-        path.write_text(text[:match.start()] + text[match.end():], encoding="utf-8")
-        print("Bootstrap complete; removed the one-time notice from AGENTS.md.")
+    path.write_text(text[:match.start()] + text[match.end():], encoding="utf-8")
+    print("Bootstrap complete; removed the one-time notice from AGENTS.md.")
 PY
 fi
 
-# rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
-# The plain installer needs api.github.com; where a sandbox blocks it, the
-# newest release tag still comes over the git protocol, so pin and retry.
+# rtk (github.com/rtk-ai/rtk) compresses command output before agents read
+# it. Isolated environments only: a repo's setup must not rewrite personal
+# agent configs on someone's own machine.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+RTK_LOCK=".agents/rtk-version"
 install_rtk() {
-    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh |
+    curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/${1:-refs/heads/master}/install.sh" |
         RTK_VERSION="${1:-}" sh >/dev/null 2>&1
 }
-if ! command -v rtk >/dev/null 2>&1; then
-    install_rtk || install_rtk "$(git ls-remote --tags --sort=-v:refname \
-        https://github.com/rtk-ai/rtk 'v[0-9]*' 2>/dev/null |
-        grep -v '\^{}' | sed -n '1s|.*refs/tags/||p')" || true
+if [ "$isolated" = "true" ]; then
+    if ! command -v rtk >/dev/null 2>&1; then
+        pinned="$(cat "$RTK_LOCK" 2>/dev/null || true)"
+        if [ -n "$pinned" ]; then
+            install_rtk "$pinned" || true
+        else
+            # Latest release; where a sandbox blocks api.github.com the
+            # newest tag still comes over the git protocol, so pin and retry.
+            install_rtk || install_rtk "$(git ls-remote --tags --sort=-v:refname \
+                https://github.com/rtk-ai/rtk 'v[0-9]*' 2>/dev/null |
+                grep -v '\^{}' | sed -n '1s|.*refs/tags/||p')" || true
+        fi
+    fi
+    # Hook rtk into every agent it supports, enumerated from rtk's own help
+    # so a new rtk target needs no template change. Runs in a throwaway
+    # directory: global (-g) config lands in $HOME, and anything an init
+    # drops into its working directory — the project-scoped,
+    # instruction-file modes — is discarded, since those agents read
+    # AGENTS.md and its rtk note already covers them.
+    if command -v rtk >/dev/null 2>&1; then
+        mkdir -p "$HOME/.claude" "$HOME/.cursor"  # rtk 0.46 assumes these exist
+        rtk_tmp="$(mktemp -d)"
+        (
+            cd "$rtk_tmp"
+            for rtk_agent in $(rtk init --help 2>/dev/null |
+                    sed -n 's/^ *- \([a-z0-9-]*\): .*/\1/p'); do
+                rtk init -g --auto-patch --agent "$rtk_agent" >/dev/null 2>&1 || true
+            done
+            for rtk_flag in --gemini --copilot --opencode; do
+                rtk init -g --auto-patch "$rtk_flag" >/dev/null 2>&1 || true
+            done
+            rtk init -g --codex >/dev/null 2>&1 || true  # rejects --auto-patch
+        )
+        rm -rf "$rtk_tmp"
+    fi
+else
+    echo "Personal environment: \$HOME left alone (no rtk install or agent" \
+        "hooks). The devcontainer provides the fully wired, isolated setup."
 fi
 
-# Hook rtk into every agent it supports, enumerated from rtk's own help so a
-# new rtk target needs no template change. Runs in a throwaway directory:
-# global (-g) config lands in $HOME, while anything an init drops into its
-# working directory — the project-scoped, instruction-file modes — is
-# discarded, since those agents read AGENTS.md and its rtk note already
-# covers them.
-if command -v rtk >/dev/null 2>&1; then
-    mkdir -p "$HOME/.claude" "$HOME/.cursor"  # rtk 0.46 assumes these exist
-    rtk_tmp="$(mktemp -d)"
-    (
-        cd "$rtk_tmp"
-        for rtk_agent in $(rtk init --help 2>/dev/null |
-                sed -n 's/^ *- \([a-z0-9-]*\): .*/\1/p'); do
-            rtk init -g --auto-patch --agent "$rtk_agent" >/dev/null 2>&1 || true
-        done
-        for rtk_flag in --gemini --copilot --opencode; do
-            rtk init -g --auto-patch "$rtk_flag" >/dev/null 2>&1 || true
-        done
-        rtk init -g --codex >/dev/null 2>&1 || true  # rejects --auto-patch
-    )
-    rm -rf "$rtk_tmp"
+# Lock the rtk version that first worked, package-lock style, so every later
+# environment reproduces it; delete .agents/rtk-version and re-run setup in a
+# fresh environment to re-lock a newer release. CI never writes the lock,
+# and the template itself ships unlocked.
+if command -v rtk >/dev/null 2>&1 && [ ! -f "$RTK_LOCK" ] &&
+    [ "${GITHUB_ACTIONS:-}" != "true" ] && [ "$is_template" != "true" ]; then
+    rtk --version 2>/dev/null | sed -n '1s/^rtk /v/p' > "$RTK_LOCK"
 fi
 
 # Project setup goes here (dependency install, codegen, migrations). Keep it
