@@ -30,9 +30,8 @@ Usage:
                           render for detected harnesses plus any named ones
   sync.py --all           same, rendering every known harness (CI default)
   sync.py check           read-only: fail on unabsorbed local additions,
-                          unrendered/broken skill links, adapters that are
-                          committed or unignored, or a stale skills lock
-  sync.py lock            re-record skill hashes after deliberately editing one
+                          unrendered/broken skill links, or adapters that are
+                          committed or unignored
   sync.py list            show known harnesses, detection state, and outputs
   sync.py install-codex   install this repo's MCP block into ~/.codex/config.toml
 
@@ -61,9 +60,7 @@ SERVERS_PATH = REPO_ROOT / ".agents" / "mcp" / "servers.json"
 LOCAL_ROOT = REPO_ROOT / ".agents" / "local"
 LOCAL_SKILLS = LOCAL_ROOT / "skills"
 LOCAL_SERVERS = LOCAL_ROOT / "mcp" / "servers.json"
-LOCK_PATH = REPO_ROOT / "skills-lock.json"
 HASH_IGNORED = {".git", "node_modules", "__pycache__"}
-FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", re.DOTALL)
 
 # Each harness: how to detect it on this machine (env vars set, commands on
 # PATH, directories under $HOME), where its per-skill symlinks go (None = it
@@ -442,21 +439,6 @@ def foreign_skills():
     return found
 
 
-def lock_add(names):
-    """Add or refresh lock entries for these skills; report frontmatter faults."""
-    try:
-        lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        lock = {"version": 1}
-    skills = lock.setdefault("skills", {})
-    failures = []
-    for name in names:
-        failures.extend(skill_failures(name, skills.setdefault(name, {}), update=True))
-    lock["skills"] = {name: skills[name] for name in sorted(skills)}
-    atomic_write(LOCK_PATH, json_document(lock))
-    return failures
-
-
 def absorb(canon, local):
     """Adopt harness-local additions into the canon before rendering.
 
@@ -486,23 +468,15 @@ def absorb(canon, local):
         print(f"Adopted MCP server {name!r} from {rel} into .agents/mcp/servers.json")
     if adopted_servers:
         atomic_write(SERVERS_PATH, json_document(canon))
-
-    if adopted_skills:
-        failures = lock_add(adopted_skills)
-        if failures:
-            print("Adopted skills need fixes (then run .agents/sync.py lock):", file=sys.stderr)
-            for failure in failures:
-                print(f"  {failure}", file=sys.stderr)
-            raise SystemExit(1)
     if adopted_skills or adopted_servers:
-        print("Commit the updated files under .agents/ (and skills-lock.json).")
+        print("Commit the updated files under .agents/.")
 
 
 # ── Skill symlinks ────────────────────────────────────────────────────────────
 
 
 def skill_names():
-    """Canonical skills only — the set the committed lock covers."""
+    """Canonical (committed, shared) skills only."""
     if not SKILLS_ROOT.is_dir():
         return []
     return sorted(path.name for path in SKILLS_ROOT.iterdir() if path.is_dir())
@@ -564,15 +538,11 @@ def skill_link_failures(target_rel):
     return failures
 
 
-# ── Skills lock ───────────────────────────────────────────────────────────────
+# ── Skill hashing (for duplicate detection during absorption) ─────────────────
 
 
 def skill_hash(skill_root):
-    """Hash a skill directory: sorted relative path plus file bytes.
-
-    Matches the folder-hash convention used by skill installers, so hashes
-    written by `npx skills add` stay valid here.
-    """
+    """Hash a skill directory: sorted relative path plus file bytes."""
     digest = hashlib.sha256()
     files = [
         path
@@ -583,83 +553,6 @@ def skill_hash(skill_root):
         digest.update(path.relative_to(skill_root).as_posix().encode("utf-8"))
         digest.update(path.read_bytes())
     return digest.hexdigest()
-
-
-def frontmatter_field(block, field):
-    """Read one top-level scalar or folded value out of YAML frontmatter."""
-    match = re.search(rf"^{field}:[ \t]*(.*)$", block, re.MULTILINE)
-    if not match:
-        return None
-    value = match.group(1).strip()
-    if value in ("", "|", ">", "|-", ">-"):
-        # Folded or literal block: take the indented lines that follow.
-        rest = block[match.end():].splitlines()
-        folded = []
-        for line in rest[1:] if rest[:1] == [""] else rest:
-            if line.strip() and not line.startswith((" ", "\t")):
-                break
-            folded.append(line.strip())
-        value = " ".join(part for part in folded if part).strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        value = value[1:-1]
-    return value.strip()
-
-
-def skill_failures(name, entry, update):
-    skill_file = SKILLS_ROOT / name / "SKILL.md"
-    if not skill_file.is_file():
-        return [f"{name}: locked but .agents/skills/{name}/SKILL.md is missing"]
-
-    failures = []
-    match = FRONTMATTER.match(skill_file.read_text(encoding="utf-8"))
-    if not match:
-        failures.append(f"{name}: SKILL.md has no YAML frontmatter")
-    else:
-        declared = frontmatter_field(match.group(1), "name")
-        if declared != name:
-            failures.append(f"{name}: SKILL.md declares name {declared!r}")
-        if not frontmatter_field(match.group(1), "description"):
-            failures.append(f"{name}: SKILL.md has no description")
-
-    actual = skill_hash(SKILLS_ROOT / name)
-    if update:
-        entry["computedHash"] = actual
-    elif entry.get("computedHash") != actual:
-        failures.append(f"{name}: content changed since it was locked (run .agents/sync.py lock)")
-    return failures
-
-
-def verify_lock(update=False):
-    """Check skills-lock.json against the skills on disk; heal it on update."""
-    try:
-        lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return [f"cannot read {LOCK_PATH.name}: {exc}"]
-    skills = lock.setdefault("skills", {})
-
-    on_disk = set(skill_names())
-    failures = []
-    for name in sorted(on_disk - set(skills)):
-        if update:
-            skills[name] = {}
-        else:
-            failures.append(f"{name}: present in .agents/skills but not in skills-lock.json")
-    for name in sorted(set(skills) - on_disk):
-        if update:
-            del skills[name]
-        else:
-            failures.append(f"{name}: locked but no .agents/skills/{name} directory")
-
-    for name in sorted(skills):
-        failures.extend(skill_failures(name, skills[name], update))
-
-    if update and not failures:
-        lock["skills"] = {name: skills[name] for name in sorted(skills)}
-        document = json_document(lock)
-        if document != LOCK_PATH.read_text(encoding="utf-8"):
-            LOCK_PATH.write_text(document, encoding="utf-8")
-            print(f"Updated {LOCK_PATH.name}")
-    return failures
 
 
 # ── Modes ─────────────────────────────────────────────────────────────────────
@@ -732,7 +625,7 @@ def check():
 
     Generated adapters must be gitignored and out of the index, harness-local
     additions must be absorbed into the canon, rendered output must parse,
-    rendered skill symlinks must resolve, and the skills lock must match disk.
+    and rendered skill symlinks must resolve.
     """
     failures = []
 
@@ -777,24 +670,12 @@ def check():
         except (OSError, ValueError) as exc:
             failures.append(f"{rel}: {exc}")
 
-    failures.extend(verify_lock())
-
     if failures:
         print("Agent config problems:", file=sys.stderr)
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         raise SystemExit(1)
-    print(f"OK: {len(outputs)} generated paths ignored, {len(skill_names())} skill(s) locked.")
-
-
-def lock():
-    failures = verify_lock(update=True)
-    if failures:
-        print("Skill problems:", file=sys.stderr)
-        for failure in failures:
-            print(f"  {failure}", file=sys.stderr)
-        raise SystemExit(1)
-    print(f"{len(skill_names())} skill(s) locked and current.")
+    print(f"OK: {len(outputs)} generated paths ignored, {len(skill_sources())} skill(s) linked.")
 
 
 def list_harnesses():
@@ -830,7 +711,7 @@ def install_codex():
 
 
 def main(arguments):
-    modes = {"check": check, "lock": lock, "list": list_harnesses, "install-codex": install_codex}
+    modes = {"check": check, "list": list_harnesses, "install-codex": install_codex}
     if arguments and arguments[0] in modes:
         if arguments[1:]:
             raise SystemExit(f"ERROR: {arguments[0]} takes no further arguments")
@@ -843,4 +724,7 @@ def main(arguments):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    except BrokenPipeError:
+        raise SystemExit(0)

@@ -29,16 +29,19 @@ start from. Everything derivable is generated.
 - **Harnesses → canon**: a skill directory dropped in a harness skills dir, or
   an MCP server added to any rendered config (`claude mcp add`, a hand edit),
   is adopted into `.agents/` and rendered back out to every other harness.
-  Commit the changed files under `.agents/` and `skills-lock.json`.
 
 `setup` installs native git hooks so none of this is ever run by hand:
 `post-checkout` and `post-merge` re-sync quietly after every pull or branch
 switch, and `pre-commit` absorbs, re-renders, and stages the canonical result
 itself — a commit that only needs converging just works, and it fails only
 when a human must decide (conflicting skill contents, broken frontmatter, a
-generated file force-added to git). CI runs the same `check`. The lock records a hash per skill (the same
-convention `npx skills add` writes), so vendored skills can't drift silently;
-after deliberately editing one, run `sync.py lock`.
+generated file force-added to git). CI runs the same `check`.
+
+Third-party skills come through `npx skills add <repo>@<skill> -y`, and their
+bookkeeping stays that tool's: it maintains the root `skills-lock.json`,
+which the template doesn't ship — it appears with the first install and is
+committed from then on (the pre-commit hook stages it automatically).
+`sync.py` never touches the lock; it only fans the skills themselves out.
 
 ## Local overlay
 

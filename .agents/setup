@@ -28,7 +28,8 @@ if own_hook pre-commit; then
 # works; it fails only when a human must decide (the message says why).
 out="$(python3 .agents/sync.py)" || { printf '%s\n' "$out" >&2; exit 1; }
 printf '%s\n' "$out" | grep '^Adopted' >&2 || true
-git add -A -- .agents skills-lock.json
+git add -A -- .agents
+git add -A -- skills-lock.json 2>/dev/null || true
 exec python3 .agents/sync.py check >/dev/null
 HOOK
     chmod +x "$hooks_dir/pre-commit"
