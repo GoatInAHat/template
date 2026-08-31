@@ -73,18 +73,40 @@ PY
 fi
 
 # rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
+# The plain installer needs api.github.com; where a sandbox blocks it, the
+# newest release tag still comes over the git protocol, so pin and retry.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+install_rtk() {
+    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh |
+        RTK_VERSION="${1:-}" sh >/dev/null 2>&1
+}
 if ! command -v rtk >/dev/null 2>&1; then
-    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh >/dev/null 2>&1 || true
+    install_rtk || install_rtk "$(git ls-remote --tags --sort=-v:refname \
+        https://github.com/rtk-ai/rtk 'v[0-9]*' 2>/dev/null |
+        grep -v '\^{}' | sed -n '1s|.*refs/tags/||p')" || true
 fi
+
+# Hook rtk into every agent it supports, enumerated from rtk's own help so a
+# new rtk target needs no template change. Runs in a throwaway directory:
+# global (-g) config lands in $HOME, while anything an init drops into its
+# working directory — the project-scoped, instruction-file modes — is
+# discarded, since those agents read AGENTS.md and its rtk note already
+# covers them.
 if command -v rtk >/dev/null 2>&1; then
-    rtk init -g >/dev/null 2>&1 || true  # hooks Claude Code, Copilot, and more
-    if command -v gemini >/dev/null 2>&1; then
-        rtk init -g --gemini >/dev/null 2>&1 || true
-    fi
-    if command -v cursor-agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
-        rtk init -g --agent cursor >/dev/null 2>&1 || true
-    fi
+    mkdir -p "$HOME/.claude" "$HOME/.cursor"  # rtk 0.46 assumes these exist
+    rtk_tmp="$(mktemp -d)"
+    (
+        cd "$rtk_tmp"
+        for rtk_agent in $(rtk init --help 2>/dev/null |
+                sed -n 's/^ *- \([a-z0-9-]*\): .*/\1/p'); do
+            rtk init -g --auto-patch --agent "$rtk_agent" >/dev/null 2>&1 || true
+        done
+        for rtk_flag in --gemini --copilot --opencode; do
+            rtk init -g --auto-patch "$rtk_flag" >/dev/null 2>&1 || true
+        done
+        rtk init -g --codex >/dev/null 2>&1 || true  # rejects --auto-patch
+    )
+    rm -rf "$rtk_tmp"
 fi
 
 # Project setup goes here (dependency install, codegen, migrations). Keep it
