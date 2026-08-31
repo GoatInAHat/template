@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Amp orbs run .agents/setup by convention; route it to the shared bootstrap.
-exec "$(dirname "$0")/scripts/bootstrap.sh"
