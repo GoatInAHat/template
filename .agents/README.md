@@ -31,13 +31,32 @@ start from. Everything derivable is generated.
   is adopted into `.agents/` and rendered back out to every other harness.
   Commit the changed files under `.agents/` and `skills-lock.json`.
 
-`setup` installs native git hooks — `post-checkout` and `post-merge` re-sync
-quietly after every pull or branch switch, and `pre-commit` runs `sync.py
-check`, with CI running the same — so after first contact nothing needs to be
-run by hand, and nothing can be committed while the two sides disagree or a
-generated file is tracked. The lock records a hash per skill (the same
+`setup` installs native git hooks so none of this is ever run by hand:
+`post-checkout` and `post-merge` re-sync quietly after every pull or branch
+switch, and `pre-commit` absorbs, re-renders, and stages the canonical result
+itself — a commit that only needs converging just works, and it fails only
+when a human must decide (conflicting skill contents, broken frontmatter, a
+generated file force-added to git). CI runs the same `check`. The lock records a hash per skill (the same
 convention `npx skills add` writes), so vendored skills can't drift silently;
 after deliberately editing one, run `sync.py lock`.
+
+## Local overlay
+
+`.agents/local/` is the personal tier: the same shape as `.agents/` —
+`skills/`, `mcp/servers.json`, and an optional `AGENTS.md` of extra
+instructions — but gitignored, so nothing in it reaches teammates or GitHub.
+It overlays the canon on this machine: local skills and servers render into
+every harness here, a local entry wins a name collision with the canon (so
+you can point a server somewhere else just for yourself), and absorption
+never moves local material into the canon. Personal instructions reach
+Claude and Gemini through the generated `CLAUDE.md`/`GEMINI.md` imports;
+harnesses that read `AGENTS.md` directly have no local-instructions hook, and
+their native per-user files (`.claude/settings.local.json`,
+`CLAUDE.local.md`) keep working alongside this.
+
+To keep something you installed through a harness personal instead of shared,
+move it into `.agents/local/` before committing — absorption's default is the
+shared canon.
 
 ## Environments
 

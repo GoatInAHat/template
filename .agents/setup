@@ -13,25 +13,36 @@ python3 .agents/sync.py "$@"
 
 # Native git hooks, since git runs nothing from a fresh clone by itself:
 # after this first contact, every pull and branch switch re-syncs on its own,
-# and commits are blocked until harness-local agent config is absorbed into
-# .agents/. Never clobbers a hook this repo's users wrote themselves.
+# and pre-commit converges and stages agent config so commits just work.
+# Never clobbers a hook this repo's users wrote themselves.
 hooks_dir="$(git rev-parse --git-path hooks)"
 mkdir -p "$hooks_dir"
-install_hook() {
-    name="$1"; shift
-    hook="$hooks_dir/$name"
-    if [ -e "$hook" ] && ! grep -q '\.agents/sync\.py' "$hook" 2>/dev/null; then
-        return 0
-    fi
-    printf '%s\n' '#!/usr/bin/env bash' '# Installed by .agents/setup.' "$@" > "$hook"
-    chmod +x "$hook"
+own_hook() {
+    [ ! -e "$hooks_dir/$1" ] || grep -q '\.agents/sync\.py' "$hooks_dir/$1" 2>/dev/null
 }
-install_hook pre-commit \
-    '# Fails until harness-local agent config is absorbed into .agents/ —' \
-    '# fix with: python3 .agents/sync.py' \
-    'exec python3 .agents/sync.py check'
-install_hook post-checkout 'python3 .agents/sync.py >/dev/null 2>&1 || true'
-install_hook post-merge 'python3 .agents/sync.py >/dev/null 2>&1 || true'
+if own_hook pre-commit; then
+    cat > "$hooks_dir/pre-commit" <<'HOOK'
+#!/usr/bin/env bash
+# Installed by .agents/setup. Absorbs harness-local agent config into
+# .agents/, re-renders, and stages the canonical result, so the commit just
+# works; it fails only when a human must decide (the message says why).
+out="$(python3 .agents/sync.py)" || { printf '%s\n' "$out" >&2; exit 1; }
+printf '%s\n' "$out" | grep '^Adopted' >&2 || true
+git add -A -- .agents skills-lock.json
+exec python3 .agents/sync.py check >/dev/null
+HOOK
+    chmod +x "$hooks_dir/pre-commit"
+fi
+for lifecycle_hook in post-checkout post-merge; do
+    if own_hook "$lifecycle_hook"; then
+        cat > "$hooks_dir/$lifecycle_hook" <<'HOOK'
+#!/usr/bin/env bash
+# Installed by .agents/setup.
+python3 .agents/sync.py >/dev/null 2>&1 || true
+HOOK
+        chmod +x "$hooks_dir/$lifecycle_hook"
+    fi
+done
 
 # rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"

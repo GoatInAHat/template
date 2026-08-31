@@ -30,12 +30,18 @@ being true.
   `npx skills add <repo>@<skill> -y`). Run `python3 .agents/sync.py` after
   editing either: it renders each harness's gitignored config — never edit or
   commit those files.
-- The sync is two-way. Anything installed through one harness — `claude mcp
-  add`, a skill dropped in `.claude/skills/`, a server hand-added to any
-  rendered config — is adopted into `.agents/` by that same command and
-  rendered for every other harness. A pre-commit hook installed by
-  `.agents/setup` blocks commits until converged; `python3 .agents/sync.py
-  check` (CI runs it too) says what's off. Details: `.agents/README.md`.
+- The sync is two-way and hands-off. Anything installed through one harness —
+  `claude mcp add`, a skill dropped in `.claude/skills/`, a server hand-added
+  to any rendered config — is adopted into `.agents/` and rendered for every
+  other harness; git hooks installed by `.agents/setup` do this on every
+  commit (staging the result) and after every pull or checkout, so no extra
+  step exists. A commit fails only when a human must decide; `python3
+  .agents/sync.py check` (CI runs it too) says why. Details:
+  `.agents/README.md`.
+- Personal-only config goes in gitignored `.agents/local/` — same shape as
+  `.agents/` (`skills/`, `mcp/servers.json`, optional `AGENTS.md` of extra
+  instructions). It overlays the canon on this machine only: rendered into
+  your harnesses, wins name collisions, never absorbed, never committed.
 - Every environment bootstraps through the same `.agents/setup`, reached via
   committed hooks (devcontainer, Claude Code, Cursor, Copilot, Amp); it also
   installs git hooks that re-sync on every pull and checkout. Project setup

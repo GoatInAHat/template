@@ -1,4 +1,8 @@
 # ─── Agent local state ────────────────────────────────────
+# .agents/local/ is the personal overlay: same shape as .agents/ (skills/,
+# mcp/servers.json, AGENTS.md), rendered into your harnesses on this machine
+# only, never absorbed into the canon, never committed.
+/.agents/local/
 CLAUDE.local.md
 .claude/settings.local.json
 .claude/worktrees/
