@@ -35,9 +35,11 @@ Usage:
   sync.py list            show known harnesses, detection state, and outputs
   sync.py install-codex   install this repo's MCP block into ~/.codex/config.toml
 
-Harnesses that read AGENTS.md and .agents/skills/ natively need no adapter and
-no entry here: Copilot's coding agent, Windsurf, Goose, Zed, Crush, Cline,
-Trae, Augment, Hermes, Antigravity, Jules, Devin, dsh, gsd.
+Only harnesses this repo must do something for — an MCP config dialect, an
+instructions pointer, or skill symlinks — have an entry here. Every other
+harness reads AGENTS.md and .agents/skills/ natively, needs nothing, and is
+deliberately listed nowhere: a new harness that follows the standards is
+supported implicitly.
 """
 import hashlib
 import json
@@ -80,10 +82,6 @@ HARNESSES = {
     "amp":       {"cmd": ["amp"], "home": [".amp"], "skills": None, "render": "amp"},
     "codebuddy": {"cmd": ["codebuddy"], "home": [".codebuddy"], "skills": ".codebuddy/skills", "render": None},
 }
-
-NATIVE = ("copilot", "windsurf", "goose", "zed", "crush", "cline", "trae",
-          "augment", "hermes", "antigravity", "jules", "devin", "dsh", "gsd")
-
 
 def detected(spec):
     return (
@@ -576,12 +574,15 @@ def atomic_write(path, content):
 
 
 def active_harnesses(arguments):
-    """Detected harnesses plus any named ones; environment hooks name their own."""
+    """Detected harnesses plus any named ones; environment hooks name their own.
+
+    A name with no entry needs nothing rendered — harnesses that follow the
+    standards are supported implicitly — so it is noted and skipped, never
+    refused.
+    """
     named = [argument for argument in arguments if not argument.startswith("-")]
-    unknown = sorted(set(named) - set(HARNESSES) - set(NATIVE))
-    if unknown:
-        known = ", ".join([*HARNESSES, *NATIVE])
-        raise SystemExit(f"ERROR: unknown harness {', '.join(unknown)}. Known: {known}")
+    for name in sorted(set(named) - set(HARNESSES)):
+        print(f"{name}: nothing to render (reads AGENTS.md and .agents/skills natively)")
     if "--all" in arguments or os.environ.get("GITHUB_ACTIONS") == "true":
         return list(HARNESSES)
     return [name for name, spec in HARNESSES.items() if name in named or detected(spec)]
@@ -688,7 +689,7 @@ def list_harnesses():
             adapters.append("files → " + ", ".join(sorted(RENDERERS[spec["render"]](servers))))
         state = "detected" if detected(spec) else "not detected"
         print(f"{name:10} {state:13} {'; '.join(adapters)}")
-    print(f"{'native':10} {'—':13} AGENTS.md + .agents/skills, no adapter: {', '.join(NATIVE)}")
+    print("Any harness not listed reads AGENTS.md and .agents/skills natively; nothing to render.")
 
 
 def install_codex():

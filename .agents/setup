@@ -22,8 +22,8 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ -f /.dockerenv ] ||
 fi
 
 # The template repository itself — origin matching the keep= slug in
-# AGENTS.md's bootstrap marker — keeps shipping that notice and never locks
-# tool versions; repos generated from it do both.
+# AGENTS.md's bootstrap marker — keeps shipping that notice; repos generated
+# from it shed it on first setup.
 is_template=false
 keep_slug="$(sed -n 's/.*<!-- setup keep=\([^ >]*\) -->.*/\1/p' AGENTS.md 2>/dev/null | head -n 1)"
 origin_url="$(git remote get-url origin 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
@@ -92,23 +92,18 @@ fi
 # it. Isolated environments only: a repo's setup must not rewrite personal
 # agent configs on someone's own machine.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-RTK_LOCK=".agents/rtk-version"
 install_rtk() {
     curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/${1:-refs/heads/master}/install.sh" |
         RTK_VERSION="${1:-}" sh >/dev/null 2>&1
 }
 if [ "$isolated" = "true" ]; then
     if ! command -v rtk >/dev/null 2>&1; then
-        pinned="$(cat "$RTK_LOCK" 2>/dev/null || true)"
-        if [ -n "$pinned" ]; then
-            install_rtk "$pinned" || true
-        else
-            # Latest release; where a sandbox blocks api.github.com the
-            # newest tag still comes over the git protocol, so pin and retry.
-            install_rtk || install_rtk "$(git ls-remote --tags --sort=-v:refname \
-                https://github.com/rtk-ai/rtk 'v[0-9]*' 2>/dev/null |
-                grep -v '\^{}' | sed -n '1s|.*refs/tags/||p')" || true
-        fi
+        # Latest release — versioning is rtk's own business. Where a sandbox
+        # blocks api.github.com, the newest tag still comes over the git
+        # protocol, so name it explicitly and retry.
+        install_rtk || install_rtk "$(git ls-remote --tags --sort=-v:refname \
+            https://github.com/rtk-ai/rtk 'v[0-9]*' 2>/dev/null |
+            grep -v '\^{}' | sed -n '1s|.*refs/tags/||p')" || true
     fi
     # Hook rtk into every agent it supports, enumerated from rtk's own help
     # so a new rtk target needs no template change. Runs in a throwaway
@@ -135,15 +130,6 @@ if [ "$isolated" = "true" ]; then
 else
     echo "Personal environment: \$HOME left alone (no rtk install or agent" \
         "hooks). The devcontainer provides the fully wired, isolated setup."
-fi
-
-# Lock the rtk version that first worked, package-lock style, so every later
-# environment reproduces it; delete .agents/rtk-version and re-run setup in a
-# fresh environment to re-lock a newer release. CI never writes the lock,
-# and the template itself ships unlocked.
-if command -v rtk >/dev/null 2>&1 && [ ! -f "$RTK_LOCK" ] &&
-    [ "${GITHUB_ACTIONS:-}" != "true" ] && [ "$is_template" != "true" ]; then
-    rtk --version 2>/dev/null | sed -n '1s/^rtk /v/p' > "$RTK_LOCK"
 fi
 
 # Project setup goes here (dependency install, codegen, migrations). Keep it

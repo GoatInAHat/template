@@ -8,9 +8,12 @@ the [Agent Skills](https://agentskills.io) standard. Two tiers, nothing else:
 | **Canonical**, committed | `AGENTS.md`, `skills/`, `mcp/servers.json`, `sync.py`, `setup`, and the environment hooks below |
 | **Generated**, gitignored | Everything else a harness reads — MCP configs, skill symlinks, the one-line `CLAUDE.md`/`GEMINI.md` imports of `AGENTS.md` — rendered per checkout by `sync.py` for the harnesses detected on the machine |
 
-Most harnesses — Codex cloud, Copilot's coding agent, Windsurf, Goose, Zed,
-Cline, Jules, Devin, and friends — read `AGENTS.md` and `.agents/skills/`
-natively and need no adapter at all. `sync.py list` shows who gets what.
+A harness appears in this system only if something must be done for it — an
+MCP config dialect, an instructions pointer, or skill symlinks (`sync.py
+list` shows who gets what). Every other harness reads `AGENTS.md` and
+`.agents/skills/` natively, needs no adapter, and is deliberately listed
+nowhere: a new harness that follows the standards is supported implicitly,
+with no template change.
 
 The only committed harness-specific files are the hook carriers
 (`.claude/settings.json`, `.cursor/environment.json`,
@@ -81,12 +84,9 @@ on your own machine. Agents whose rtk integration is a project instruction
 file, and agents rtk doesn't know, are covered by the rtk note in
 `AGENTS.md`, which they all read natively.
 
-The rtk version that first works is recorded in `.agents/rtk-version`,
-package-lock style, and later environments install exactly that release —
-graceful degradation, not surprise upgrades. Delete the file and re-run
-setup in a fresh environment to re-lock a newer release. CI never writes the
-lock, and the template ships unlocked so each project pins what it first
-verified. `AGENTS.md` ships with
+rtk's version is rtk's own business: setup installs the latest release,
+best-effort, and every rtk step degrades gracefully when it is unavailable
+or changes shape. `AGENTS.md` ships with
 a one-time bootstrap notice for environments with no hook; the first
 successful run outside CI deletes it (the template repository itself,
 matched by the `keep=` slug in the notice's marker, keeps it).
