@@ -5,19 +5,18 @@ Canonical sources:
   .agents/skills/            shared skills (Agent Skills standard)
   .agents/mcp/servers.json   MCP servers, Claude `mcpServers` dialect plus an
                              optional `tools` read-only allowlist per server
+  .agents/hooks/             hook scripts that generated adapters point at
 
-Committed seed files (always kept in sync, because they are committed):
-  .claude/settings.json      `enabledMcpjsonServers` key only
-  .gemini/settings.json      `mcpServers` key only
-
-Generated adapters (gitignored, rendered per checkout) are produced only for
-harnesses detected on this machine, so a checkout carries adapters for the
-tools that actually run here and nothing else.
+Nothing harness-specific is committed. Every adapter is gitignored and
+rendered per checkout, and only for the harnesses detected on this machine, so
+a checkout carries adapters for the tools that actually run here and nothing
+else. Run bootstrap.sh once per fresh checkout (or from a cloud environment's
+setup-script field) to produce them.
 
 Usage:
-  sync.py [harness ...]   sync seeds + adapters for detected (or named) harnesses
-  sync.py --all           sync adapters for every known harness (CI default)
-  sync.py check           verify the managed keys in committed seed files
+  sync.py [harness ...]   render adapters for detected (or named) harnesses
+  sync.py --all           render adapters for every known harness (CI default)
+  sync.py check           verify no adapter is committed or unignored
   sync.py list            show known harnesses, detection state, and adapters
   sync.py install-codex   install this repo's MCP block into ~/.codex/config.toml
 
@@ -31,6 +30,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -41,22 +41,21 @@ SERVERS_PATH = REPO_ROOT / ".agents" / "mcp" / "servers.json"
 
 # Each harness: how to detect it on this machine (env vars set, commands on
 # PATH, directories under $HOME), where its per-skill symlinks go (None = it
-# reads .agents/skills natively), and which MCP renderer feeds it (None = no
-# generated project-scoped MCP file). Detection never probes a path sync.py
-# itself creates — one run would make that harness sticky-detected.
+# reads .agents/skills natively), and which renderer produces its config files
+# (None = nothing to generate). Detection never probes a path sync.py itself
+# creates — one run would make that harness sticky-detected.
 HARNESSES = {
-    "claude":    {"env": ["CLAUDECODE", "CLAUDE_CODE_REMOTE"], "cmd": ["claude"], "home": [".claude"], "skills": ".claude/skills", "mcp": "claude"},
-    "codex":     {"cmd": ["codex"], "home": [".codex"], "skills": None, "mcp": "codex"},
-    "cursor":    {"cmd": ["cursor-agent", "cursor"], "home": [".cursor"], "skills": None, "mcp": "cursor"},
-    "gemini":    {"cmd": ["gemini"], "home": [".gemini"], "skills": None, "mcp": None,
-                  "note": "mcp → .gemini/settings.json (committed seed, always synced)"},
-    "qwen":      {"cmd": ["qwen"], "home": [".qwen"], "skills": None, "mcp": "qwen"},
-    "opencode":  {"cmd": ["opencode"], "home": [".config/opencode"], "skills": None, "mcp": "opencode"},
-    "vscode":    {"cmd": ["code"], "skills": None, "mcp": "vscode"},
-    "kilo":      {"cmd": ["kilo"], "home": [".config/kilo"], "skills": None, "mcp": "kilo"},
-    "factory":   {"cmd": ["droid"], "home": [".factory"], "skills": None, "mcp": "factory"},
-    "amp":       {"cmd": ["amp"], "home": [".amp"], "skills": None, "mcp": "amp"},
-    "codebuddy": {"cmd": ["codebuddy"], "home": [".codebuddy"], "skills": ".codebuddy/skills", "mcp": None},
+    "claude":    {"env": ["CLAUDECODE", "CLAUDE_CODE_REMOTE"], "cmd": ["claude"], "home": [".claude"], "skills": ".claude/skills", "render": "claude"},
+    "codex":     {"cmd": ["codex"], "home": [".codex"], "skills": None, "render": "codex"},
+    "cursor":    {"cmd": ["cursor-agent", "cursor"], "home": [".cursor"], "skills": None, "render": "cursor"},
+    "gemini":    {"cmd": ["gemini"], "home": [".gemini"], "skills": None, "render": "gemini"},
+    "qwen":      {"cmd": ["qwen"], "home": [".qwen"], "skills": None, "render": "qwen"},
+    "opencode":  {"cmd": ["opencode"], "home": [".config/opencode"], "skills": None, "render": "opencode"},
+    "vscode":    {"cmd": ["code"], "skills": None, "render": "vscode"},
+    "kilo":      {"cmd": ["kilo"], "home": [".config/kilo"], "skills": None, "render": "kilo"},
+    "factory":   {"cmd": ["droid"], "home": [".factory"], "skills": None, "render": "factory"},
+    "amp":       {"cmd": ["amp"], "home": [".amp"], "skills": None, "render": "amp"},
+    "codebuddy": {"cmd": ["codebuddy"], "home": [".codebuddy"], "skills": ".codebuddy/skills", "render": None},
 }
 
 # Read AGENTS.md and .agents/skills/ natively; listed so `list` can say so.
@@ -110,8 +109,17 @@ def is_remote(config):
     return "url" in config
 
 
-# ── MCP renderers ─────────────────────────────────────────────────────────────
+# ── Renderers ─────────────────────────────────────────────────────────────────
 # Each takes the canonical servers dict and returns {relative path: content}.
+# Most only render MCP configuration; a harness that needs more (an instruction
+# pointer, a hook registration) renders those files too.
+
+CLAUDE_MD = """@AGENTS.md
+
+Generated by .agents/scripts/sync.py — do not edit. Claude Code has no native
+AGENTS.md reader, so this pointer imports it. Every reusable agent asset lives
+in `.agents/`; adapters like this one are gitignored and rendered per checkout.
+"""
 
 
 def render_claude(servers):
@@ -121,7 +129,30 @@ def render_claude(servers):
         if is_remote(body):
             body.setdefault("type", "http")
         rendered[name] = body
-    return {".mcp.json": json_document({"mcpServers": rendered})}
+    # Claude Code ignores project MCP servers until they are opted into
+    # `enabledMcpjsonServers`. Local, uncommitted settings belong in
+    # .claude/settings.local.json, which this file never touches.
+    settings = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Workflow",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "$CLAUDE_PROJECT_DIR/.agents/hooks/workflow-model-mix.py",
+                        }
+                    ],
+                }
+            ]
+        },
+        "enabledMcpjsonServers": sorted(servers),
+    }
+    return {
+        "CLAUDE.md": CLAUDE_MD,
+        ".mcp.json": json_document({"mcpServers": rendered}),
+        ".claude/settings.json": json_document(settings),
+    }
 
 
 def render_cursor(servers):
@@ -156,6 +187,14 @@ def gemini_servers(servers):
             body["includeTools"] = list(config["tools"])
         rendered[name] = body
     return rendered
+
+
+def render_gemini(servers):
+    document = {
+        "context": {"fileName": ["AGENTS.md", "GEMINI.md"]},
+        "mcpServers": gemini_servers(servers),
+    }
+    return {".gemini/settings.json": json_document(document)}
 
 
 def render_qwen(servers):
@@ -244,10 +283,11 @@ def render_codex(servers):
     return {".codex/config.toml": codex_toml(servers)}
 
 
-MCP_RENDERERS = {
+RENDERERS = {
     "claude": render_claude,
     "codex": render_codex,
     "cursor": render_cursor,
+    "gemini": render_gemini,
     "qwen": render_qwen,
     "opencode": render_opencode,
     "vscode": render_vscode,
@@ -257,34 +297,18 @@ MCP_RENDERERS = {
 }
 
 
-# ── Committed seeds: one managed key each, merged in place ────────────────────
-
-
-def merged_document(path, key, value):
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        document = {}
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"ERROR: cannot read {path}: {exc}")
-    if not isinstance(document, dict):
-        raise SystemExit(f"ERROR: {path} must contain a JSON object")
-    document[key] = value
-    return json_document(document)
-
-
-def seed_outputs(servers):
-    """{path: expected content} for the committed files sync owns one key of.
-
-    Claude Code ignores project MCP servers until they are opted into
-    `enabledMcpjsonServers`; Gemini CLI keeps MCP servers inside its settings
-    file. Both files are committed and hand-owned apart from that one key.
-    """
-    seeds = {
-        REPO_ROOT / ".claude" / "settings.json": ("enabledMcpjsonServers", sorted(servers)),
-        REPO_ROOT / ".gemini" / "settings.json": ("mcpServers", gemini_servers(servers)),
-    }
-    return {path: merged_document(path, key, value) for path, (key, value) in seeds.items()}
+def output_paths():
+    """Every repo-relative path any renderer can write, across all harnesses."""
+    servers = load_servers()
+    paths = set()
+    for spec in HARNESSES.values():
+        if spec["render"]:
+            paths.update(RENDERERS[spec["render"]](servers))
+        if spec["skills"]:
+            # Trailing slash: `git check-ignore` only matches a directory-only
+            # .gitignore pattern when the path is spelled as a directory.
+            paths.add(spec["skills"] + "/")
+    return sorted(paths)
 
 
 # ── Skill symlinks ────────────────────────────────────────────────────────────
@@ -358,13 +382,10 @@ def active_harnesses(arguments):
 
 def sync(arguments):
     servers = load_servers()
-    for path, content in seed_outputs(servers).items():
-        atomic_write(path, content)
-
     generated = []
     for name in active_harnesses(arguments):
         spec = HARNESSES[name]
-        files = MCP_RENDERERS[spec["mcp"]](servers) if spec["mcp"] else {}
+        files = RENDERERS[spec["render"]](servers) if spec["render"] else {}
         for rel, content in files.items():
             atomic_write(REPO_ROOT / rel, content)
         if spec["skills"]:
@@ -372,29 +393,44 @@ def sync(arguments):
             files = {**files, spec["skills"] + "/": None}
         if files:
             generated.append(f"{name}: {', '.join(sorted(files))}")
-    print("Synced committed seeds: .claude/settings.json, .gemini/settings.json")
     for line in generated:
         print(f"Generated {line}")
     if not generated and not any(not argument.startswith("-") for argument in arguments):
         print("No harnesses detected; run with --all or name one to force.")
 
 
+def git(*arguments):
+    return subprocess.run(
+        ["git", "-C", str(REPO_ROOT), *arguments],
+        capture_output=True, text=True, check=False,
+    ).stdout.splitlines()
+
+
 def check():
-    stale = []
-    for path, expected in seed_outputs(load_servers()).items():
-        try:
-            current = path.read_text(encoding="utf-8")
-        except OSError:
-            current = None
-        if current != expected:
-            stale.append(path.relative_to(REPO_ROOT))
-    if stale:
-        print("Stale managed keys in committed seed files:", file=sys.stderr)
-        for path in stale:
-            print(f"  {path}", file=sys.stderr)
-        print("Run .agents/scripts/sync.py to regenerate them.", file=sys.stderr)
+    """No generated adapter may be committed, and every one must be ignored.
+
+    That invariant is the whole point of the layout: `.agents/` is canonical,
+    everything a harness reads is rendered from it per checkout. A renderer
+    added without a matching .gitignore entry, or an adapter force-added to the
+    index, breaks it silently otherwise.
+    """
+    outputs = output_paths()
+    tracked = git("ls-files", "--", *outputs)
+    # --no-index: a tracked path is otherwise reported as unignored too, which
+    # would duplicate the complaint below.
+    ignored = set(git("check-ignore", "--no-index", "--", *outputs))
+    unignored = [path for path in outputs if path not in ignored]
+    if tracked or unignored:
+        if tracked:
+            print("Generated adapters are committed; remove them from git:", file=sys.stderr)
+            for path in tracked:
+                print(f"  {path}", file=sys.stderr)
+        if unignored:
+            print("Generated adapters missing from .gitignore:", file=sys.stderr)
+            for path in unignored:
+                print(f"  {path}", file=sys.stderr)
         raise SystemExit(1)
-    print("Managed keys in committed seed files are current.")
+    print(f"{len(outputs)} generated path(s) ignored and uncommitted.")
 
 
 def list_harnesses():
@@ -403,10 +439,8 @@ def list_harnesses():
         adapters = []
         if spec["skills"]:
             adapters.append(f"skills → {spec['skills']}")
-        if spec["mcp"]:
-            adapters.append("mcp → " + ", ".join(MCP_RENDERERS[spec["mcp"]](servers)))
-        if spec.get("note"):
-            adapters.append(spec["note"])
+        if spec["render"]:
+            adapters.append("files → " + ", ".join(sorted(RENDERERS[spec["render"]](servers))))
         state = "detected" if detected(spec) else "not detected"
         print(f"{name:10} {state:13} {'; '.join(adapters)}")
     print(f"{'native':10} {'—':13} AGENTS.md + .agents/skills, no adapter: {', '.join(NATIVE)}")

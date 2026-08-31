@@ -5,15 +5,17 @@
 
 # ─── Generated agent adapters ─────────────────────────────
 # Written wholesale by .agents/scripts/sync.py (via bootstrap.sh) for the
-# harnesses detected on this machine; nothing here is a bootstrap entry point,
-# so none of it needs to exist before that script runs, and none of it carries
-# any hand-authored content. Do not hand-edit or commit these.
-# (.claude/settings.json and .gemini/settings.json are similar but stay
-# committed — the generator only owns one key in each, the rest is
-# hand-edited. CI fails if a sync.py output ever shows up untracked here,
-# so keep this list in step with sync.py's renderers.)
+# harnesses detected on this machine. Nothing harness-specific is committed:
+# every file below is rendered from .agents/ per checkout and carries no
+# hand-authored content. Do not hand-edit or commit these. Keep the list in
+# step with sync.py's renderers — `sync.py check` fails if a renderer output
+# is unignored or tracked, and CI fails if a bootstrap run leaves an untracked
+# file behind.
+/CLAUDE.md
 /.mcp.json
+/.claude/settings.json
 /.claude/skills/
+/.gemini/settings.json
 /.cursor/mcp.json
 /.codex/config.toml
 /.vscode/mcp.json

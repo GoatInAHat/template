@@ -7,8 +7,8 @@ of truth, and what it must not touch.>
 
 | Path | Purpose |
 |---|---|
-| `.agents/` | The one canonical agent folder: shared skills, MCP definitions, scripts, and the `setup` entry shim. Everything agent-related is edited here and only here. |
-| `.claude/`, `.cursor/`, `.gemini/`, `.github/` | Committed seeds (files a harness reads straight from the clone before any script can run: hook and environment registrations, one managed key per settings file) plus CI enforcement under `.github/workflows/`. Everything else a harness needs is generated from `.agents/` and gitignored — never edit or commit generated adapters. |
+| `.agents/` | The one canonical agent folder: shared skills, MCP definitions, hook scripts, setup scripts, and the `setup` entry shim. Everything agent-related is edited here and only here. |
+| `.github/workflows/` | CI enforcement of the rules below. Nothing harness-specific is committed anywhere in this repository: every file a harness reads (`CLAUDE.md`, `.claude/`, `.cursor/`, `.gemini/`, …) is generated from `.agents/` and gitignored — never edit or commit one. |
 | `.devcontainer/` | Container definition for Codespaces, Ona, and local devcontainers. |
 
 ## Code quality
@@ -52,18 +52,14 @@ Concretely, in `Workflow` scripts set `model:` per `agent()` call — omitting i
 inherits the session's strongest tier for every step, which is exactly the
 failure mode. A deliberately single-tier workflow states why in a
 `// single-tier: <reason>` comment; a committed Claude Code hook
-(`.claude/hooks/workflow-model-mix.py`) blocks multi-agent scripts that do
+(`.agents/hooks/workflow-model-mix.py`) blocks multi-agent scripts that do
 neither.
 
 ## Skills and MCP
 
-- **Ponytail is always on**, at its default `full` intensity, for every coding
-  task here. Read `.agents/skills/ponytail/SKILL.md` and apply it on every
-  response; keep it active unless the user explicitly changes intensity or turns
-  it off. `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`,
-  and `ponytail-review` are pinned beside it.
-- **find-skills** covers skill discovery — reach for it when a task looks like
-  something an installable skill already does.
+- No skills ship with this template. Add one under `.agents/skills/<name>/` or
+  install a third party's with `npx skills add <repo>@<skill> -y`, then re-run
+  `.agents/scripts/sync.py` and `.agents/scripts/check-skills.py --update`.
 - **Context7** is registered for library documentation: `resolve-library-id`
   then `query-docs`, rather than recalling an API from memory. It works
   unauthenticated at a lower rate limit; set `CONTEXT7_API_KEY` and add the
@@ -71,27 +67,26 @@ neither.
 
 ## Agent configuration
 
-- Run `.agents/scripts/bootstrap.sh` once per fresh checkout. It is idempotent
-  and is what every cloud environment runs on startup — see the environments
-  table in `.agents/README.md`. Environments with no in-repo hook (Codex
-  cloud, Jules, Devin, Factory) take that same line in their UI setup field.
+- Run `.agents/scripts/bootstrap.sh` once per fresh checkout — nothing a
+  harness reads exists until you do. It is idempotent, and every environment
+  invokes this one line: from `.devcontainer/`, from `.agents/setup`, or from
+  the setup-script field in a cloud harness's own settings. See the
+  environments table in `.agents/README.md`.
 - Edit shared skills only in `.agents/skills/`; edit MCP servers only in
-  `.agents/mcp/servers.json`; then run `.agents/scripts/sync.py`. It renders
-  gitignored adapters for the harnesses detected on this machine (`--all` for
-  every harness, `list` for the full table of who gets what). Instructions and
-  skills ride the standards: harnesses read `AGENTS.md` (Claude Code through
-  the committed `CLAUDE.md` pointer, Gemini through the committed
-  `context.fileName` seed) and `.agents/skills/` (Claude Code and CodeBuddy
-  through generated symlinks). The rendered files are MCP configs for tools
-  with a project-level MCP surface; dsh has none (user-level `$DSH_HOME`
-  config only).
-- `.claude/settings.json` and `.gemini/settings.json` stay committed even
-  though `sync.py` writes into them: it only owns one key in each
-  (`enabledMcpjsonServers`, `mcpServers`) and merges it into whatever the rest
-  of the file already says. The other committed agent files are the hooks that
-  reach the setup script before it can run (see the repository-layout table);
-  everything else is generated, and CI fails if a generated file is not
-  covered by `.gitignore`.
+  `.agents/mcp/servers.json`; edit hook scripts only in `.agents/hooks/`; then
+  run `.agents/scripts/sync.py`. It renders gitignored adapters for the
+  harnesses detected on this machine (`--all` for every harness, `list` for the
+  full table of who gets what). Instructions and skills ride the standards:
+  harnesses read `AGENTS.md` (Claude Code through the generated `CLAUDE.md`
+  pointer, Gemini through a generated `context.fileName`) and `.agents/skills/`
+  (Claude Code and CodeBuddy through generated symlinks). The rest is MCP
+  config for tools with a project-level MCP surface; dsh has none (user-level
+  `$DSH_HOME` config only).
+- Every renderer output must be listed in `.gitignore`'s generated-adapters
+  block. `.agents/scripts/sync.py check` fails if one is unignored or tracked,
+  and CI fails if a bootstrap run leaves an untracked file behind. Local,
+  uncommitted Claude Code settings belong in `.claude/settings.local.json`,
+  which the generator never touches.
 - Codex loads a repo-local `.codex/config.toml` only for trusted projects; run
   `.agents/scripts/sync.py install-codex` only when the user wants this repo's
   MCP servers in their user-level Codex config instead.
