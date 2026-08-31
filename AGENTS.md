@@ -37,8 +37,9 @@ being true.
   `.agents/setup` blocks commits until converged; `python3 .agents/sync.py
   check` (CI runs it too) says what's off. Details: `.agents/README.md`.
 - Every environment bootstraps through the same `.agents/setup`, reached via
-  committed hooks (devcontainer, Claude Code, Cursor, Copilot, Amp). Project
-  setup belongs in that script; keep it idempotent.
+  committed hooks (devcontainer, Claude Code, Cursor, Copilot, Amp); it also
+  installs git hooks that re-sync on every pull and checkout. Project setup
+  belongs in that script; keep it idempotent.
 - `.agents/setup` installs `rtk` to compress command output. When a command
   will print a lot and no hook rewrote it, prefix it: `rtk git diff`,
   `rtk pytest`.

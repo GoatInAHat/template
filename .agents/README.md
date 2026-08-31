@@ -5,12 +5,19 @@ the [Agent Skills](https://agentskills.io) standard. Two tiers, nothing else:
 
 | Tier | Contents |
 |---|---|
-| **Canonical**, committed | `skills/`, `mcp/servers.json`, `sync.py`, `setup`, plus the standard files at the root: `AGENTS.md`, one-line `CLAUDE.md`/`GEMINI.md` imports, and the environment hooks below |
-| **Generated**, gitignored | Everything else a harness reads, rendered per checkout by `sync.py` for the harnesses detected on the machine |
+| **Canonical**, committed | `AGENTS.md`, `skills/`, `mcp/servers.json`, `sync.py`, `setup`, and the environment hooks below |
+| **Generated**, gitignored | Everything else a harness reads — MCP configs, skill symlinks, the one-line `CLAUDE.md`/`GEMINI.md` imports of `AGENTS.md` — rendered per checkout by `sync.py` for the harnesses detected on the machine |
 
 Most harnesses — Codex cloud, Copilot's coding agent, Windsurf, Goose, Zed,
 Cline, Jules, Devin, and friends — read `AGENTS.md` and `.agents/skills/`
 natively and need no adapter at all. `sync.py list` shows who gets what.
+
+The only committed harness-specific files are the hook carriers
+(`.claude/settings.json`, `.cursor/environment.json`,
+`copilot-setup-steps.yml`, the devcontainer): git deliberately executes
+nothing from a fresh clone — a repo that could would be an attack vector —
+so each harness's own committed hook format is the one place automation can
+start from. Everything derivable is generated.
 
 ## Two-way sync
 
@@ -24,8 +31,10 @@ natively and need no adapter at all. `sync.py list` shows who gets what.
   is adopted into `.agents/` and rendered back out to every other harness.
   Commit the changed files under `.agents/` and `skills-lock.json`.
 
-`setup` installs a git pre-commit hook running `sync.py check`, and CI runs
-the same, so nothing can be committed while the two sides disagree or a
+`setup` installs native git hooks — `post-checkout` and `post-merge` re-sync
+quietly after every pull or branch switch, and `pre-commit` runs `sync.py
+check`, with CI running the same — so after first contact nothing needs to be
+run by hand, and nothing can be committed while the two sides disagree or a
 generated file is tracked. The lock records a hash per skill (the same
 convention `npx skills add` writes), so vendored skills can't drift silently;
 after deliberately editing one, run `sync.py lock`.

@@ -7,6 +7,8 @@ CLAUDE.local.md
 # Rendered per checkout from .agents/ by .agents/sync.py; never hand-edited
 # or committed. Keep in step with sync.py's renderers — `sync.py check` fails
 # if a renderer output is unignored or tracked.
+/CLAUDE.md
+/GEMINI.md
 /.mcp.json
 /.claude/skills/
 /.codebuddy/skills/

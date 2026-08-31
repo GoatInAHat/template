@@ -11,18 +11,27 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 # Arguments name additional harnesses to render (each hook passes its own).
 python3 .agents/sync.py "$@"
 
-# Guard commits: harness-local agent config must be absorbed into .agents/
-# before it lands. Never clobbers a hook this repo's users wrote themselves.
+# Native git hooks, since git runs nothing from a fresh clone by itself:
+# after this first contact, every pull and branch switch re-syncs on its own,
+# and commits are blocked until harness-local agent config is absorbed into
+# .agents/. Never clobbers a hook this repo's users wrote themselves.
 hooks_dir="$(git rev-parse --git-path hooks)"
-hook="$hooks_dir/pre-commit"
-if [ ! -e "$hook" ] || grep -q '\.agents/sync\.py' "$hook" 2>/dev/null; then
-    mkdir -p "$hooks_dir"
-    printf '%s\n' '#!/usr/bin/env bash' \
-        '# Installed by .agents/setup. Fails until harness-local agent config' \
-        '# is absorbed into .agents/ — fix with: python3 .agents/sync.py' \
-        'exec python3 .agents/sync.py check' > "$hook"
+mkdir -p "$hooks_dir"
+install_hook() {
+    name="$1"; shift
+    hook="$hooks_dir/$name"
+    if [ -e "$hook" ] && ! grep -q '\.agents/sync\.py' "$hook" 2>/dev/null; then
+        return 0
+    fi
+    printf '%s\n' '#!/usr/bin/env bash' '# Installed by .agents/setup.' "$@" > "$hook"
     chmod +x "$hook"
-fi
+}
+install_hook pre-commit \
+    '# Fails until harness-local agent config is absorbed into .agents/ —' \
+    '# fix with: python3 .agents/sync.py' \
+    'exec python3 .agents/sync.py check'
+install_hook post-checkout 'python3 .agents/sync.py >/dev/null 2>&1 || true'
+install_hook post-merge 'python3 .agents/sync.py >/dev/null 2>&1 || true'
 
 # rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
