@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# The one setup entry point. Every environment calls this same script through
+# its native, committed hook — see the environments table in .agents/README.md
+# — so setup stays standardized instead of per-harness. Idempotent and
+# non-interactive; everything below the sync is best-effort so restricted
+# sandboxes still get a working checkout.
+set -euo pipefail
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+
+# Adopt harness-local agent config into .agents/ and render adapters back out.
+# Arguments name additional harnesses to render (each hook passes its own).
+python3 .agents/sync.py "$@"
+
+# Guard commits: harness-local agent config must be absorbed into .agents/
+# before it lands. Never clobbers a hook this repo's users wrote themselves.
+hooks_dir="$(git rev-parse --git-path hooks)"
+hook="$hooks_dir/pre-commit"
+if [ ! -e "$hook" ] || grep -q '\.agents/sync\.py' "$hook" 2>/dev/null; then
+    mkdir -p "$hooks_dir"
+    printf '%s\n' '#!/usr/bin/env bash' \
+        '# Installed by .agents/setup. Fails until harness-local agent config' \
+        '# is absorbed into .agents/ — fix with: python3 .agents/sync.py' \
+        'exec python3 .agents/sync.py check' > "$hook"
+    chmod +x "$hook"
+fi
+
+# rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+if ! command -v rtk >/dev/null 2>&1; then
+    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh >/dev/null 2>&1 || true
+fi
+if command -v rtk >/dev/null 2>&1; then
+    rtk init -g >/dev/null 2>&1 || true  # hooks Claude Code, Copilot, and more
+    if command -v gemini >/dev/null 2>&1; then
+        rtk init -g --gemini >/dev/null 2>&1 || true
+    fi
+    if command -v cursor-agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
+        rtk init -g --agent cursor >/dev/null 2>&1 || true
+    fi
+fi
+
+# Project setup goes here (dependency install, codegen, migrations). Keep it
+# idempotent and fast when there is nothing to do.

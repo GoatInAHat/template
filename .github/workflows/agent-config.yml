@@ -1,0 +1,33 @@
+name: Agent config
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Canon renders clean for every harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the shared setup entry point
+        run: bash .agents/setup --all
+
+      - name: Verify invariants
+        # Adapters gitignored and untracked, local state absorbed, rendered
+        # output parses, skill symlinks resolve, skills lock current.
+        run: python3 .agents/sync.py check
+
+      - name: No untracked files left behind
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "Setup left files that are neither tracked nor ignored."
+            exit 1
+          fi
