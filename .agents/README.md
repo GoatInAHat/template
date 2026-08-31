@@ -66,7 +66,10 @@ shared canon.
 Every environment reaches the same `.agents/setup` through its native,
 committed hook — that one script is where project setup (dependencies,
 codegen) goes. It also installs [rtk](https://github.com/rtk-ai/rtk),
-best-effort, to compress command output agents read.
+best-effort, to compress command output agents read. `AGENTS.md` ships with
+a one-time bootstrap notice for environments with no hook; the first
+successful run outside CI deletes it (the template repository itself,
+matched by the `keep=` slug in the notice's marker, keeps it).
 
 | Environment | Committed hook |
 |---|---|

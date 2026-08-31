@@ -45,6 +45,33 @@ HOOK
     fi
 done
 
+# The bootstrap notice in AGENTS.md is for agents in environments where
+# nothing ran this script; once it has run, the hooks above make everything
+# automatic, so the notice deletes itself. Two exceptions keep the file
+# untouched: CI checkouts (a self-edit would dirty the tree), and the
+# template repository itself — identified by the marker's keep= slug
+# matching origin — which has to keep shipping the notice.
+if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+    python3 - <<'PY'
+import re
+import subprocess
+from pathlib import Path
+
+path = Path("AGENTS.md")
+text = path.read_text(encoding="utf-8") if path.is_file() else ""
+match = re.search(r"<!-- setup(?:\s+keep=(\S+))? -->\n.*?<!-- /setup -->\n*", text, re.S)
+if match:
+    origin = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip().lower()
+    keep = match.group(1)
+    if not (keep and keep.lower() in origin):
+        path.write_text(text[:match.start()] + text[match.end():], encoding="utf-8")
+        print("Bootstrap complete; removed the one-time notice from AGENTS.md.")
+PY
+fi
+
 # rtk (github.com/rtk-ai/rtk) compresses command output before agents read it.
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 if ! command -v rtk >/dev/null 2>&1; then
