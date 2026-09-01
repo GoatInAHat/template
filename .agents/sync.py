@@ -473,6 +473,24 @@ def absorb(canon, local):
 # ── Skill symlinks ────────────────────────────────────────────────────────────
 
 
+def symlinks_supported():
+    """Whether this machine can create symlinks (Windows may need Developer
+    Mode); when it can't, skill linking degrades to a warning, in sync and
+    check alike, instead of breaking setup."""
+    global _SYMLINKS_SUPPORTED
+    if _SYMLINKS_SUPPORTED is None:
+        try:
+            with tempfile.TemporaryDirectory() as probe:
+                os.symlink("probe-target", os.path.join(probe, "probe"))
+            _SYMLINKS_SUPPORTED = True
+        except OSError:
+            _SYMLINKS_SUPPORTED = False
+    return _SYMLINKS_SUPPORTED
+
+
+_SYMLINKS_SUPPORTED = None
+
+
 def skill_names():
     """Canonical (committed, shared) skills only."""
     if not SKILLS_ROOT.is_dir():
@@ -496,6 +514,10 @@ def sync_skills(target_rel):
     target_dir = REPO_ROOT / target_rel
     if not sources and not target_dir.is_dir():
         return  # nothing to link and nothing stale to prune
+    if sources and not symlinks_supported():
+        print(f"WARNING: symlinks unavailable; {target_rel} won't see shared "
+              "skills on this machine.", file=sys.stderr)
+        return
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for name, source in sources.items():
@@ -521,7 +543,7 @@ def skill_link_failures(target_rel):
     """If this skills dir was rendered, its links must be complete and live."""
     sources = skill_sources()
     target_dir = REPO_ROOT / target_rel
-    if not target_dir.is_dir():
+    if not target_dir.is_dir() or not symlinks_supported():
         return []
     failures = [
         f"{target_rel}/{name}: missing or broken symlink (run .agents/sync.py)"
@@ -560,7 +582,7 @@ def atomic_write(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
         try:
             mode = path.stat().st_mode & 0o777
@@ -598,7 +620,13 @@ def sync(arguments):
         spec = HARNESSES[name]
         files = RENDERERS[spec["render"]](servers) if spec["render"] else {}
         for rel, content in files.items():
-            atomic_write(REPO_ROOT / rel, content)
+            path = REPO_ROOT / rel
+            try:
+                if path.read_text(encoding="utf-8") == content:
+                    continue  # unchanged; don't churn mtimes or clobber
+            except OSError:
+                pass
+            atomic_write(path, content)
         if spec["skills"]:
             sync_skills(spec["skills"])
             files = {**files, spec["skills"] + "/": None}

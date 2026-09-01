@@ -44,7 +44,11 @@ conventions, decisions; drop anything that stops being true.
 - Secrets stay in the environment or a gitignored `.env`, never in git.
 - Update docs in the same change that outdates them.
 - Keep this document lean and token-efficient.
-- When dispatching subagents, dynamic workflows, etc. use a balanced set of models. Not everything needs the most expensive one. Dispatch subagents to do the bulk of the work for you to stop context bloat from tools, but read important information yourself to reason over it in full detail without a lossy summary.
+- When dispatching subagents, dynamic workflows, and other delegated work,
+  use a balanced set of models — not everything needs the most expensive one.
+  Dispatch subagents for the bulk of the work to keep tool output from
+  bloating your context, but read important information yourself to reason
+  over it in full detail rather than through a lossy summary.
 
 ## Agent config
 
